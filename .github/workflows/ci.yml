@@ -25,6 +25,15 @@ jobs:
               with:
                   enable-cache: true
 
+            - name: Check Dockerfile Python matches .python-version
+              run: |
+                  expected="$(tr -d '[:space:]' < .python-version)"
+                  actual="$(sed -n 's/^FROM python:\([0-9]*\.[0-9]*\).*/\1/p' Dockerfile)"
+                  if [ "$expected" != "$actual" ]; then
+                      echo "Dockerfile uses Python '$actual' but .python-version is '$expected'" >&2
+                      exit 1
+                  fi
+
             - name: Install dependencies
               run: uv sync --locked
 
