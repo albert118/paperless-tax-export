@@ -16,7 +16,7 @@ def test_defaults_match_the_brief() -> None:
     assert settings.base_url == "http://localhost:8000"
     assert settings.token_file == Path("secrets/paperless-token.txt")
     assert settings.deduction_tag == "tax deductible"
-    assert settings.ibkr_tag == "tax-information"
+    assert settings.tax_info_tag == "tax-information"
     assert settings.ibkr_correspondent == "Interactive Brokers"
     assert settings.field_amount == "Transaction Amount"
     assert settings.field_gst is None

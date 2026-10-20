@@ -6,7 +6,9 @@ report and the CLI exits 0. The audit never calls ``resolve_tag`` or
 ``resolve_fields``, so it reports lenient findings instead of exiting on
 configuration mismatches. Paperless permissions are per object type, so the
 report records how many tags, correspondents, document types and storage paths
-the token can see, plus the base URL and UTC timestamp the audit ran against.
+the token can see, plus the base URL and UTC timestamp the audit ran against
+and any non-fatal ``notes`` (such as the client's record of ``next`` links it
+re-anchored to the configured origin).
 
 The optional list reads are resilient: a tags, custom-fields, storage-paths,
 correspondents or document-types fetch that raises an auth, status or
@@ -22,7 +24,10 @@ holds aggregates only: no per-document title, document id, date, custom-field
 value, ``archived_file_name`` string or monetary value may enter the report.
 The one document-derived aggregate is the ``archived_file_name`` first/second
 path-segment count summary, which ``dump_json`` never emits; those segment
-strings are rendered only by ``render()`` for the owner's console.
+strings are rendered only by ``render()`` for the owner's console. The base
+URL, run timestamp, visibility counts, the ``unavailable`` endpoint list and
+the value-neutral ``notes`` observations (including the client's
+origin-rewrite records) are structural metadata and never carry the API token.
 """
 
 from __future__ import annotations
@@ -108,20 +113,33 @@ class SegmentCount:
 
 @dataclass(frozen=True, slots=True)
 class IbkrFindings:
-    """How the IBKR identifiers line up with the configured names."""
+    """How the IBKR correspondent lines up with the configured name.
 
-    tag_name: str
-    tag_exists: bool
-    tag_document_count: int
+    IBKR selection is correspondent-only; the ``tax-information`` tag is
+    general tax metadata and is reported separately as ``TagMetadata``.
+    """
+
     correspondent_name: str
     correspondent_exists: bool
     correspondent_document_count: int
     trade_confirmation_types: tuple[str, ...]
     realized_gains_types: tuple[str, ...]
-    correspondent_without_tag: int
-    tag_with_other_correspondent: int
-    tag_candidates: tuple[str, ...] = ()
     correspondent_candidates: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class TagMetadata:
+    """General metadata about one configured tag name.
+
+    The ``tax-information`` tag is general tax metadata, not an IBKR-specific
+    marker, so the audit reports it for what it is instead of folding it into
+    the IBKR findings.
+    """
+
+    name: str
+    exists: bool
+    document_count: int
+    candidates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +168,7 @@ class AuditReport:
     archived_first_segments: tuple[SegmentCount, ...]
     archived_second_segments: tuple[SegmentCount, ...]
     ibkr: IbkrFindings
+    tax_metadata_tag: TagMetadata
     expected_fields: tuple[ExpectedFieldInfo, ...]
     api_version: str | None
     server_version: str | None
@@ -161,6 +180,7 @@ class AuditReport:
     storage_paths_visible: int = 0
     unavailable: tuple[str, ...] = ()
     tag_candidates: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
 
 
 def run_audit(
@@ -169,7 +189,7 @@ def run_audit(
     tag: str,
     fy_start: str,
     fy_end: str,
-    ibkr_tag: str,
+    tax_info_tag: str,
     ibkr_correspondent: str,
     field_amount: str | None,
     field_gst: str | None,
@@ -187,7 +207,8 @@ def run_audit(
     Missing tags, missing fields and zero coverage are reported, never raised.
     A ``None`` expected field name means the setting is not configured; it is
     reported as such by the renderer and never appears as "missing from
-    Paperless".
+    Paperless". The client's record of re-anchored ``next`` links is carried
+    into ``notes`` as non-fatal observations.
     """
     recorded_at = datetime.now(UTC).replace(microsecond=0).isoformat()
 
@@ -243,13 +264,11 @@ def run_audit(
     correspondents = _optional_read(client.list_correspondents, "correspondents", unavailable)
     document_types = _optional_read(client.list_document_types, "document_types", unavailable)
     ibkr = _ibkr_findings(
-        tags=all_tags,
         correspondents=correspondents,
         document_types=document_types,
-        documents=documents,
-        ibkr_tag=ibkr_tag,
         ibkr_correspondent=ibkr_correspondent,
     )
+    tax_metadata = _tag_metadata(name=tax_info_tag, tags=all_tags)
 
     fields_by_name = {field.name: field for field in fields}
     expected_fields = _expected_fields(
@@ -272,6 +291,7 @@ def run_audit(
         archived_first_segments=first_segments,
         archived_second_segments=second_segments,
         ibkr=ibkr,
+        tax_metadata_tag=tax_metadata,
         expected_fields=expected_fields,
         api_version=client.api_version,
         server_version=client.server_version,
@@ -283,6 +303,7 @@ def run_audit(
         storage_paths_visible=len(storage_path_rows),
         unavailable=tuple(unavailable),
         tag_candidates=tag_candidates,
+        notes=tuple(client.origin_rewrites),
     )
 
 
@@ -317,8 +338,12 @@ _OPTIONAL_READ_RECOVERABLE: tuple[type[Exception], ...] = (
 
 
 def _normalise_name(name: str) -> str:
-    """Normalise *name* for near-miss comparison: casefold and collapse whitespace."""
-    return " ".join(name.casefold().split())
+    """Normalise *name* for near-miss comparison: casefold and collapse separators.
+
+    Hyphens and underscores are treated as spaces so ``tax-deductible`` and
+    ``tax deductible`` compare equal and are reported as candidates.
+    """
+    return " ".join(name.casefold().replace("-", " ").replace("_", " ").split())
 
 
 def _near_miss_names(names: Iterable[str], target: str) -> tuple[str, ...]:
@@ -402,22 +427,16 @@ def _segment_counts(counter: dict[str, int]) -> tuple[SegmentCount, ...]:
 
 def _ibkr_findings(
     *,
-    tags: Sequence[Tag],
     correspondents: Sequence[Correspondent],
     document_types: Sequence[DocumentType],
-    documents: Sequence[Document],
-    ibkr_tag: str,
     ibkr_correspondent: str,
 ) -> IbkrFindings:
-    """Aggregate the IBKR identifier checks and near-miss counts."""
-    tag_matches = [tag_def for tag_def in tags if tag_def.name == ibkr_tag]
-    ibkr_tag_ids = frozenset(tag_def.id for tag_def in tag_matches)
+    """Aggregate the IBKR correspondent checks and near-miss counts."""
     correspondent_matches = [
         correspondent
         for correspondent in correspondents
         if correspondent.name == ibkr_correspondent
     ]
-    correspondent_ids = frozenset(correspondent.id for correspondent in correspondent_matches)
 
     trade_confirmation = tuple(
         sorted(
@@ -434,22 +453,7 @@ def _ibkr_findings(
         )
     )
 
-    correspondent_without_tag = 0
-    tag_with_other_correspondent = 0
-    for document in documents:
-        has_ibkr_tag = bool(ibkr_tag_ids.intersection(document.tags))
-        has_target_correspondent = (
-            document.correspondent is not None and document.correspondent in correspondent_ids
-        )
-        if has_target_correspondent and not has_ibkr_tag:
-            correspondent_without_tag += 1
-        if has_ibkr_tag and not has_target_correspondent:
-            tag_with_other_correspondent += 1
-
     return IbkrFindings(
-        tag_name=ibkr_tag,
-        tag_exists=bool(tag_matches),
-        tag_document_count=sum(tag_def.document_count for tag_def in tag_matches),
         correspondent_name=ibkr_correspondent,
         correspondent_exists=bool(correspondent_matches),
         correspondent_document_count=sum(
@@ -457,13 +461,21 @@ def _ibkr_findings(
         ),
         trade_confirmation_types=trade_confirmation,
         realized_gains_types=realized_gains,
-        correspondent_without_tag=correspondent_without_tag,
-        tag_with_other_correspondent=tag_with_other_correspondent,
-        tag_candidates=_near_miss_names((tag_def.name for tag_def in tags), ibkr_tag),
         correspondent_candidates=_near_miss_names(
             (correspondent.name for correspondent in correspondents),
             ibkr_correspondent,
         ),
+    )
+
+
+def _tag_metadata(*, name: str, tags: Sequence[Tag]) -> TagMetadata:
+    """General metadata about the configured *name* tag (exact match plus near-misses)."""
+    matches = [tag_def for tag_def in tags if tag_def.name == name]
+    return TagMetadata(
+        name=name,
+        exists=bool(matches),
+        document_count=sum(tag_def.document_count for tag_def in matches),
+        candidates=_near_miss_names((tag_def.name for tag_def in tags), name),
     )
 
 
@@ -505,10 +517,13 @@ def render(report: AuditReport) -> str:
     """Console text for the audit report (the owner sees this, not git)."""
     lines = ["Paperless audit", "===============", ""]
 
-    if report.unavailable:
+    if report.unavailable or report.notes:
         lines.append("Warnings")
         lines.append("--------")
         lines.extend(f"  {entry}" for entry in report.unavailable)
+        if report.notes:
+            lines.append("  Notes:")
+            lines.extend(f"    {note}" for note in report.notes)
         lines.append("")
 
     lines.append(f"Deduction tag {report.tag_name!r}:")
@@ -589,20 +604,6 @@ def render(report: AuditReport) -> str:
     ibkr = report.ibkr
     lines.append("")
     lines.append("IBKR identifiers:")
-    if ibkr.tag_exists:
-        lines.append(f"  tag {ibkr.tag_name!r}: exists with {ibkr.tag_document_count} document(s)")
-    elif report.tags_visible == 0:
-        lines.append(
-            f"  tag {ibkr.tag_name!r}: no tags visible to this token — {_visibility_hint(report)}"
-        )
-    else:
-        line = (
-            f"  tag {ibkr.tag_name!r}: no tag named {ibkr.tag_name!r} "
-            f"among {report.tags_visible} visible"
-        )
-        if ibkr.tag_candidates:
-            line += f"; candidates: {_names_or_none(ibkr.tag_candidates)}"
-        lines.append(line)
     if ibkr.correspondent_exists:
         lines.append(
             f"  correspondent {ibkr.correspondent_name!r}: exists with "
@@ -629,14 +630,21 @@ def render(report: AuditReport) -> str:
         "  document types matching 'realized gains summary': "
         f"{_names_or_none(ibkr.realized_gains_types)}"
     )
-    lines.append(
-        f"  in the FY deduction set: {ibkr.correspondent_without_tag} document(s) with "
-        f"correspondent {ibkr.correspondent_name!r} but without tag {ibkr.tag_name!r}"
-    )
-    lines.append(
-        f"  in the FY deduction set: {ibkr.tag_with_other_correspondent} document(s) "
-        f"with tag {ibkr.tag_name!r} but a different correspondent"
-    )
+
+    tax = report.tax_metadata_tag
+    lines.append("")
+    lines.append("Tax-information tag (general tax metadata, not IBKR-specific):")
+    if tax.exists:
+        lines.append(f"  tag {tax.name!r}: exists with {tax.document_count} document(s)")
+    elif report.tags_visible == 0:
+        lines.append(
+            f"  tag {tax.name!r}: no tags visible to this token — {_visibility_hint(report)}"
+        )
+    else:
+        line = f"  tag {tax.name!r}: no tag named {tax.name!r} among {report.tags_visible} visible"
+        if tax.candidates:
+            line += f"; candidates: {_names_or_none(tax.candidates)}"
+        lines.append(line)
 
     lines.append("")
     lines.append("Expected field names (from the Settings defaults):")
@@ -685,8 +693,9 @@ def dump_json(report: AuditReport) -> str:
     This is the only sanctioned committed data path: no document title, id,
     date, custom-field value, ``archived_file_name`` string or amount is ever
     part of the payload (see the module docstring for the full rule). The
-    base URL, run timestamp, visibility counts and ``unavailable`` endpoint
-    list are metadata and never carry the API token.
+    base URL, run timestamp, visibility counts, the ``unavailable`` endpoint
+    list and the value-neutral ``notes`` observations (including the client's
+    recorded origin rewrites) are metadata and never carry the API token.
     """
     payload: dict[str, Any] = {
         "tag": report.tag_name,
@@ -730,16 +739,17 @@ def dump_json(report: AuditReport) -> str:
             for path in report.storage_paths
         ],
         "ibkr": {
-            "tag": report.ibkr.tag_name,
-            "tag_exists": report.ibkr.tag_exists,
-            "tag_document_count": report.ibkr.tag_document_count,
             "correspondent": report.ibkr.correspondent_name,
             "correspondent_exists": report.ibkr.correspondent_exists,
             "correspondent_document_count": report.ibkr.correspondent_document_count,
             "trade_confirmation_types": list(report.ibkr.trade_confirmation_types),
             "realized_gains_types": list(report.ibkr.realized_gains_types),
-            "correspondent_without_tag": report.ibkr.correspondent_without_tag,
-            "tag_with_other_correspondent": report.ibkr.tag_with_other_correspondent,
+        },
+        "tax_metadata_tag": {
+            "name": report.tax_metadata_tag.name,
+            "exists": report.tax_metadata_tag.exists,
+            "document_count": report.tax_metadata_tag.document_count,
+            "candidates": list(report.tax_metadata_tag.candidates),
         },
         "expected_fields": [
             {
@@ -770,5 +780,6 @@ def dump_json(report: AuditReport) -> str:
         "document_types_visible": report.document_types_visible,
         "storage_paths_visible": report.storage_paths_visible,
         "unavailable": list(report.unavailable),
+        "notes": list(report.notes),
     }
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"

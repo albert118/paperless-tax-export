@@ -53,7 +53,10 @@ def _build_parser() -> argparse.ArgumentParser:
         description=(
             "Diagnose how the live Paperless instance lines up with the export"
             " settings. The audit is not a gate: findings (a missing tag, zero"
-            " documents, missing fields) are reported and the exit code stays 0."
+            " documents, missing fields) are reported and the exit code stays 0"
+            " unless nothing at all came back and every optional read failed"
+            " (then it is 3, so a bad token or unreachable server is never a"
+            " successful audit)."
         ),
     )
     audit.add_argument(
@@ -87,9 +90,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"financial-year end, ISO date (default: {settings.fy_end})",
     )
     audit.add_argument(
-        "--ibkr-tag",
-        default=settings.ibkr_tag,
-        help=f"IBKR tag name (default: {settings.ibkr_tag})",
+        "--tax-info-tag",
+        default=settings.tax_info_tag,
+        help=(
+            "general tax-metadata tag name, reported with a caveat that it is"
+            f" not IBKR-specific (default: {settings.tax_info_tag})"
+        ),
     )
     audit.add_argument(
         "--ibkr-correspondent",
@@ -169,7 +175,7 @@ def _settings_from_args(args: argparse.Namespace) -> Settings:
         base_url=args.base_url,
         token_file=args.token_file,
         deduction_tag=args.tag,
-        ibkr_tag=args.ibkr_tag,
+        tax_info_tag=args.tax_info_tag,
         ibkr_correspondent=args.ibkr_correspondent,
         fy_start=args.fy_start,
         fy_end=args.fy_end,
@@ -200,7 +206,7 @@ def _run_audit_command(settings: Settings, args: argparse.Namespace) -> int:
             tag=settings.deduction_tag,
             fy_start=settings.fy_start,
             fy_end=settings.fy_end,
-            ibkr_tag=settings.ibkr_tag,
+            tax_info_tag=settings.tax_info_tag,
             ibkr_correspondent=settings.ibkr_correspondent,
             field_amount=settings.field_amount,
             field_gst=settings.field_gst,
@@ -212,9 +218,17 @@ def _run_audit_command(settings: Settings, args: argparse.Namespace) -> int:
         json_path = args.output / args.json_name
         json_path.parent.mkdir(parents=True, exist_ok=True)
         json_path.write_text(dump_json(report), encoding="utf-8")
-    if report.unavailable and report.tags_visible == 0 and not report.custom_fields:
-        # Every optional read failed and nothing at all came back: a bad token
-        # or an unreachable server must not look like a successful audit.
+    if (
+        report.unavailable
+        and report.tags_visible == 0
+        and report.correspondents_visible == 0
+        and report.document_types_visible == 0
+        and report.storage_paths_visible == 0
+        and not report.custom_fields
+    ):
+        # Every optional read failed and nothing at all came back — not even a
+        # custom field: a bad token or an unreachable server must not look
+        # like a successful audit.
         return EXIT_NETWORK
     return EXIT_OK
 

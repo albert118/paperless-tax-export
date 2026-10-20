@@ -82,7 +82,7 @@ def _run(
     tag: str = "tax-deductible",
     fy_start: str = "2025-07-01",
     fy_end: str = "2026-06-30",
-    ibkr_tag: str = "tax-information",
+    tax_info_tag: str = "tax-information",
     ibkr_correspondent: str = "Interactive Brokers",
     field_amount: str = "Gross Amount",
     field_gst: str = "GST Amount",
@@ -95,7 +95,7 @@ def _run(
         tag=tag,
         fy_start=fy_start,
         fy_end=fy_end,
-        ibkr_tag=ibkr_tag,
+        tax_info_tag=tax_info_tag,
         ibkr_correspondent=ibkr_correspondent,
         field_amount=field_amount,
         field_gst=field_gst,
@@ -214,13 +214,13 @@ def test_archived_file_name_segments_are_counted_in_render() -> None:
     assert "'11' x1" in rendered
 
 
-def test_ibkr_near_misses_are_counted() -> None:
+def test_ibkr_findings_are_correspondent_facts_only() -> None:
     tags = [
         tag_payload(1, "tax-deductible", document_count=2),
         tag_payload(2, "tax-information", document_count=1),
     ]
     correspondents = [
-        correspondent_payload(5, "Interactive Brokers"),
+        correspondent_payload(5, "Interactive Brokers", document_count=3),
         correspondent_payload(6, "Commission Agent"),
     ]
     documents = [
@@ -229,10 +229,10 @@ def test_ibkr_near_misses_are_counted() -> None:
     ]
     report = _run(_make_handler(tags=tags, documents=documents, correspondents=correspondents))
     ibkr = report.ibkr
-    assert ibkr.tag_exists
     assert ibkr.correspondent_exists
-    assert ibkr.correspondent_without_tag == 1
-    assert ibkr.tag_with_other_correspondent == 1
+    assert ibkr.correspondent_document_count == 3
+    assert not hasattr(ibkr, "tag_name")
+    assert not hasattr(ibkr, "correspondent_without_tag")
 
 
 def test_ibkr_document_type_matches_are_case_insensitive() -> None:
@@ -272,8 +272,8 @@ def test_dump_json_never_contains_document_derived_strings() -> None:
     assert coverage["present_count"] == 1
     assert coverage["null_count"] == 0
     assert coverage["absent_count"] == 0
-    assert data["ibkr"]["correspondent_without_tag"] == 0
-    assert data["ibkr"]["tag_with_other_correspondent"] == 0
+    assert "tag" not in data["ibkr"]
+    assert data["tax_metadata_tag"]["exists"] is False
     rendered = render(report)
     assert "'2025' x1" in rendered
     assert "'10' x1" in rendered
@@ -436,17 +436,18 @@ def test_deduction_tag_near_miss_candidates_are_reported() -> None:
     assert "candidates: 'Tax-Deductible'" in rendered
 
 
-def test_ibkr_near_miss_candidates_are_reported() -> None:
+def test_ibkr_and_tax_metadata_near_miss_candidates_are_reported() -> None:
     tags = [
         tag_payload(2, "Tax-Information", document_count=1),
         tag_payload(3, "income"),
     ]
     correspondents = [correspondent_payload(4, "Interactive  Brokers")]
     report = _run(_make_handler(tags=tags, correspondents=correspondents))
-    ibkr = report.ibkr
     # A near-miss is reported, never matched on.
-    assert ibkr.tag_exists is False
-    assert ibkr.correspondent_exists is False
+    assert report.ibkr.correspondent_exists is False
+    assert report.ibkr.correspondent_candidates == ("Interactive  Brokers",)
+    assert report.tax_metadata_tag.exists is False
+    assert report.tax_metadata_tag.candidates == ("Tax-Information",)
     rendered = render(report)
     assert "candidates: 'Tax-Information'" in rendered
     assert "candidates: 'Interactive  Brokers'" in rendered
@@ -501,3 +502,112 @@ def test_documents_fetch_remains_fatal() -> None:
 
     with pytest.raises(HttpStatusError):
         _run(handler)
+
+
+def test_tax_metadata_tag_reports_the_general_tax_metadata_count() -> None:
+    tags = [tag_payload(2, "tax-information", document_count=190)]
+    report = _run(_make_handler(tags=tags))
+    tax = report.tax_metadata_tag
+    assert tax.name == "tax-information"
+    assert tax.exists is True
+    assert tax.document_count == 190
+    assert tax.candidates == ()
+    rendered = render(report)
+    assert "general tax metadata, not IBKR-specific" in rendered
+    data = json.loads(dump_json(report))
+    assert data["tax_metadata_tag"] == {
+        "name": "tax-information",
+        "exists": True,
+        "document_count": 190,
+        "candidates": [],
+    }
+
+
+def test_ibkr_block_mentions_no_tag_or_overlap_counters() -> None:
+    tags = [tag_payload(1, "tax-deductible", document_count=2)]
+    correspondents = [correspondent_payload(5, "Interactive Brokers", document_count=1)]
+    documents = [_doc(1, tags=[1], correspondent=5)]
+    report = _run(_make_handler(tags=tags, documents=documents, correspondents=correspondents))
+    rendered = render(report)
+    ibkr_section = rendered.partition("IBKR identifiers:")[2].partition("Tax-information tag")[0]
+    assert "tag" not in ibkr_section.casefold()
+    assert "correspondent_without_tag" not in ibkr_section
+    assert "tag_with_other_correspondent" not in ibkr_section
+
+
+def test_near_miss_normalisation_treats_separators_as_spaces() -> None:
+    tags = [
+        tag_payload(1, "tax-deductible", document_count=2),
+        tag_payload(3, "tax_deductible", document_count=1),
+        tag_payload(4, "tax deductible", document_count=5),
+    ]
+    report = _run(_make_handler(tags=tags), tag="tax deductible")
+    assert tuple(match.name for match in report.tag_matches) == ("tax deductible",)
+    assert report.tag_candidates == ("tax-deductible", "tax_deductible")
+
+
+def test_client_origin_rewrites_are_reported_as_notes() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/api/tags/":
+            if request.url.params.get("page") == "2":
+                return json_response(page_payload([tag_payload(2, "income")], count=2))
+            return json_response(
+                {
+                    "count": 2,
+                    "next": "https://other.example/api/tags/?page=2",
+                    "previous": None,
+                    "results": [tag_payload(1, "tax-deductible", document_count=2)],
+                }
+            )
+        if path == "/api/documents/":
+            return json_response(page_payload([]))
+        if path == "/api/custom_fields/":
+            return json_response(page_payload([custom_field_payload(10, "Gross Amount")]))
+        if path == "/api/storage_paths/":
+            return json_response(page_payload([]))
+        if path == "/api/correspondents/":
+            return json_response(page_payload([]))
+        if path == "/api/document_types/":
+            return json_response(page_payload([]))
+        return json_response({}, status_code=404)
+
+    report = _run(handler)
+    assert any("server advertised" in note for note in report.notes)
+    assert any("re-anchored to" in note for note in report.notes)
+    assert any("other.example" in note for note in report.notes)
+    rendered = render(report)
+    assert "Notes:" in rendered
+    assert "server advertised" in rendered
+
+
+def test_notes_are_serialised_in_dump_json() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/api/tags/":
+            if request.url.params.get("page") == "2":
+                return json_response(page_payload([tag_payload(2, "income")], count=2))
+            return json_response(
+                {
+                    "count": 2,
+                    "next": "https://other.example/api/tags/?page=2",
+                    "previous": None,
+                    "results": [tag_payload(1, "tax-deductible", document_count=2)],
+                }
+            )
+        if path == "/api/documents/":
+            return json_response(page_payload([]))
+        if path == "/api/custom_fields/":
+            return json_response(page_payload([custom_field_payload(10, "Gross Amount")]))
+        if path == "/api/storage_paths/":
+            return json_response(page_payload([]))
+        if path == "/api/correspondents/":
+            return json_response(page_payload([]))
+        if path == "/api/document_types/":
+            return json_response(page_payload([]))
+        return json_response({}, status_code=404)
+
+    report = _run(handler)
+    data = json.loads(dump_json(report))
+    assert data["notes"]
+    assert any("re-anchored to" in note for note in data["notes"])

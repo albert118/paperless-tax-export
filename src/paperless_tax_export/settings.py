@@ -26,7 +26,7 @@ class Settings:
     base_url: str = "http://localhost:8000"
     token_file: Path = Path("secrets/paperless-token.txt")
     deduction_tag: str = "tax deductible"
-    ibkr_tag: str = "tax-information"
+    tax_info_tag: str = "tax-information"
     ibkr_correspondent: str = "Interactive Brokers"
     field_amount: str | None = "Transaction Amount"
     field_gst: str | None = None
