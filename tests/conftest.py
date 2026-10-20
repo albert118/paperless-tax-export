@@ -80,6 +80,30 @@ def custom_field_payload(
     }
 
 
+def correspondent_payload(
+    correspondent_id: int, name: str, document_count: int = 0
+) -> dict[str, object]:
+    """Build a Paperless correspondent object."""
+    return {"id": correspondent_id, "name": name, "document_count": document_count}
+
+
+def document_type_payload(type_id: int, name: str, document_count: int = 0) -> dict[str, object]:
+    """Build a Paperless document-type object."""
+    return {"id": type_id, "name": name, "document_count": document_count}
+
+
+def storage_path_payload(
+    path_id: int, name: str, path: str, document_count: int = 0
+) -> dict[str, object]:
+    """Build a Paperless storage-path object."""
+    return {
+        "id": path_id,
+        "name": name,
+        "path": path,
+        "document_count": document_count,
+    }
+
+
 def document_payload(
     doc_id: int,
     *,

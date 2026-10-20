@@ -12,7 +12,7 @@ Bootstrap complete. What is in place:
 | Path | Purpose |
 | --- | --- |
 | `pyproject.toml`, `uv.lock` | uv project, Python 3.14, pinned dependencies |
-| `src/paperless_tax_export/` | Package. The CLI supports `--help` and `--version` only |
+| `src/paperless_tax_export/` | Package. The CLI supports `--help`, `--version` and the `audit` subcommand |
 | `tests/` | pytest suite |
 | `Dockerfile`, `.dockerignore` | Non-root image built from a locked uv install |
 | `.gitignore`, `.gitattributes`, `.editorconfig`, `.python-version` | Environment |
@@ -20,8 +20,10 @@ Bootstrap complete. What is in place:
 | `.github/` | CI, image build, pull request labeler, dependabot, release notes |
 | `AGENTS.md` | Rules and context for coding agents |
 
-Nothing reads Paperless yet. There is no client, no year selection and no CSV writer, so
-the tool only prints help and its version.
+The `audit` subcommand reads the live Paperless instance read-only and reports how it
+lines up with the export settings (see below); it is the only thing that touches
+Paperless today. There is no CSV writer and no `run` subcommand yet. Year selection and field resolution exist
+in the library but are not exposed on the command line, so nothing is exported.
 
 CI runs on every pull request and on pushes to `main`: ruff, ruff format check, mypy and
 pytest. The container image is built on pull requests and pushed to GHCR only on a
@@ -52,6 +54,38 @@ the traceability key; no CSV contains URLs.
   date, filtered by tag.
 - Amounts are GST-inclusive, which is the whole claim for an individual who is not
   registered for GST.
+
+### Audit the live instance
+
+Run the audit before the first export to see how the live instance lines up with the
+settings:
+
+```sh
+uv run paperless-tax-export audit \
+  --base-url https://paperless.example.com \
+  --token-file secrets/paperless-token.txt
+```
+
+The audit prints a console report and writes `output/audit.json`. It reports, without
+failing:
+
+- tags matching `--tag` (default `tax-deductible`) and their document counts;
+- every custom field in the instance, with type, options and document count;
+- per-field value coverage over the FY deduction documents (present / null / absent);
+- storage paths (informational — selection is `created`-only);
+- `archived_file_name` path segments under the FY deduction documents (console only);
+- IBKR identifiers: whether `--ibkr-tag` and `--ibkr-correspondent` exist, which
+  document types match `trade confirmation` / `realized gains summary`, and near-misses
+  inside the FY deduction set;
+- whether the expected field names exist (`Gross Amount` is required; `GST Amount` and
+  `Claimable %` are optional), and the Paperless API/server versions.
+
+The audit is a diagnostic, not a gate: missing tags, missing fields and zero coverage
+are findings and the exit code stays 0. Exit codes are 2 for bad flags or an unreadable
+or empty token file, 3 for auth/network/server errors, and 4 for pagination guard
+failures. `output/audit.json` carries counts and metadata only — never document titles,
+dates, field values or file names — so it is safe to copy into `tests/fixtures/` as a
+recorded fixture or share with someone else.
 
 ## The Paperless token
 

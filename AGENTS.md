@@ -20,16 +20,21 @@ Outputs, written into `output/`:
 
 ## Current state
 
-The repository builds, lints, type-checks and tests, but does not read Paperless yet.
+The repository builds, lints, type-checks and tests. The CLI has a working `audit`
+subcommand (plus `--version`) that reads the live Paperless instance read-only and
+reports how it lines up with the export settings (`output/audit.json`). The audit is a
+diagnostic, not a gate: a missing tag, zero matching documents, missing fields and zero
+coverage are printed findings and the exit code stays 0. The `run` subcommand and the
+classification/CSV pipeline do not exist yet.
 
 In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_export/`,
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,
 image build, labeler, dependabot) and the docs.
 
-The CLI supports `--help` and `--version` only. The library already has a read-only
+The CLI supports `--help`, `--version` and `audit`. The library has a read-only
 Paperless client, typed API models, amount and date parsing, and financial-year
-selection, but none of it is wired to the CLI. There is no classification, no CSV writer
-and no manifest yet.
+selection; `audit` is the first wiring of those to the CLI. There is no classification,
+no CSV writer and no manifest yet.
 
 CI runs ruff, ruff format check, mypy and pytest on every pull request and on pushes to
 `main`. `docker.yml` builds the image on pull requests and pushes to GHCR only on a
