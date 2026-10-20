@@ -1,0 +1,28 @@
+.github/workflows/docker.yml
+  s_ba5dca3cafe919::t_313f6e7d430c5d 43,49-71
+.github/workflows/ci.yml
+  s_ba5dca3cafe919::t_806ee99e9fa96c 38
+pyproject.toml
+  s_ba5dca3cafe919::t_461721d21ee3df 27
+  s_ba5dca3cafe919::t_9b43a2739f0f9f 38
+  s_ba5dca3cafe919::t_a2b7a36bbe55e8 37
+  s_ba5dca3cafe919::t_3285714166aa81 14-19
+uv.lock
+  s_ba5dca3cafe919::t_941fab48badfba 273,283,330-341
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a9fcafb65be38696ddf6a77c175cb55a214255a5",
+  "prompts": {},
+  "sessions": {
+    "s_ba5dca3cafe919": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb821b-02cf-4f9f-8841-94727a8ef3d0",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
