@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Read-only export of one financial year from Paperless-ngx to accountant-ready CSVs."
 readme = "README.md"
 requires-python = ">=3.14"
-# Deliberately empty pending the Paperless client (httpx, pydantic) in a later stage.
 dependencies = [
     "httpx>=0.28.1",
     "pydantic>=2.14.1",

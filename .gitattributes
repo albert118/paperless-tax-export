@@ -6,3 +6,8 @@
 # Windows scripts keep CRLF.
 *.bat text eol=crlf
 *.cmd text eol=crlf
+
+# Golden CSVs are compared byte for byte, and the writer emits UTF-8 BOM with
+# CRLF line endings. `-text` stops git normalising them on checkout, which would
+# otherwise fail the comparison on Windows only.
+tests/fixtures/golden/*.csv -text

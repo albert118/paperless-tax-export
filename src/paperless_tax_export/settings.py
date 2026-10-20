@@ -2,8 +2,9 @@
 
 The settings live in a frozen, slotted dataclass and are validated eagerly in
 ``__post_init__`` so a bad configuration fails before any network traffic.
-Flags will populate these values in a later stage; nothing is read from the
-environment here.
+Command-line flags populate a subset of these values (the name and date
+identifiers stay here, since they are corrected in one place); nothing is read
+from the environment.
 """
 
 from __future__ import annotations
