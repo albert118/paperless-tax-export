@@ -11,7 +11,12 @@ dependencies = []
 paperless-tax-export = "paperless_tax_export.cli:main"
 
 [dependency-groups]
-dev = ["mypy>=1.13", "pytest>=8", "ruff>=0.11"]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8",
+    "pytest-socket>=0.8.1",
+    "ruff>=0.11",
+]
 
 [build-system]
 requires = ["uv_build>=0.13.2,<0.14.0"]
@@ -19,6 +24,7 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = ["--disable-socket"]
 
 [tool.ruff]
 target-version = "py312"
@@ -27,7 +33,6 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 
-# Scope only: which paths `uv run mypy` checks. Strictness and plugins are
-# decided by the CI work, not here.
 [tool.mypy]
 files = ["src", "tests"]
+strict = true
