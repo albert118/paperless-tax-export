@@ -15,13 +15,13 @@ def test_defaults_match_the_brief() -> None:
     settings = Settings()
     assert settings.base_url == "http://localhost:8000"
     assert settings.token_file == Path("secrets/paperless-token.txt")
-    assert settings.deduction_tag == "tax-deductible"
+    assert settings.deduction_tag == "tax deductible"
     assert settings.ibkr_tag == "tax-information"
     assert settings.ibkr_correspondent == "Interactive Brokers"
-    assert settings.field_amount == "Gross Amount"
-    assert settings.field_gst == "GST Amount"
+    assert settings.field_amount == "Transaction Amount"
+    assert settings.field_gst is None
     assert settings.field_work_use == "Claimable %"
-    assert settings.field_date is None
+    assert settings.field_date == "Transaction Date"
     assert settings.field_supplier is None
     assert settings.fy_start == "2025-07-01"
     assert settings.fy_end == "2026-06-30"
@@ -30,6 +30,34 @@ def test_defaults_match_the_brief() -> None:
     assert settings.income_tags == ("income", "dividend")
     assert settings.expected_count is None
     assert settings.timeout_seconds == 30.0
+
+
+def test_field_settings_are_str_or_none() -> None:
+    settings = Settings()
+    for name in ("field_amount", "field_gst", "field_work_use", "field_date", "field_supplier"):
+        value = getattr(settings, name)
+        assert value is None or isinstance(value, str)
+
+
+@pytest.mark.parametrize(
+    "field_settings",
+    [
+        {"field_amount": "Transaction Amount", "field_date": "Transaction Date"},
+        {"field_amount": None, "field_gst": None},
+        {"field_gst": "GST Amount", "field_supplier": "Supplier"},
+        {"field_work_use": "Work Use %"},
+    ],
+)
+def test_field_settings_accept_str_and_none(field_settings: dict[str, str | None]) -> None:
+    fields = Settings(
+        field_amount=field_settings.get("field_amount"),
+        field_gst=field_settings.get("field_gst"),
+        field_work_use=field_settings.get("field_work_use"),
+        field_date=field_settings.get("field_date"),
+        field_supplier=field_settings.get("field_supplier"),
+    )
+    for name, expected in field_settings.items():
+        assert getattr(fields, name) == expected
 
 
 def test_settings_are_frozen() -> None:

@@ -87,6 +87,39 @@ def _audit_handler() -> Callable[[httpx.Request], httpx.Response]:
     return handler
 
 
+def _run_handler() -> Callable[[httpx.Request], httpx.Response]:
+    """A handler serving every endpoint the run subcommand needs."""
+    document = document_payload(
+        1,
+        title="Receipt",
+        correspondent=5,
+        custom_fields=[{"field": 10, "value": "100.00"}],
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/api/tags/":
+            return json_response(page_payload([tag_payload(1, "tax deductible", document_count=1)]))
+        if path == "/api/custom_fields/":
+            return json_response(
+                page_payload([custom_field_payload(10, "Transaction Amount", data_type="monetary")])
+            )
+        if path == "/api/correspondents/":
+            return json_response(page_payload([correspondent_payload(5, "Alpha Supplies")]))
+        if path == "/api/document_types/":
+            return json_response(page_payload([document_type_payload(6, "Receipt")]))
+        if path == "/api/documents/":
+            params = request.url.params
+            if params.get("page_size") == "1" and params.get("fields") == "id":
+                return json_response(
+                    {"count": 1, "next": None, "previous": None, "results": [{"id": 1}]}
+                )
+            return json_response(page_payload([document]))
+        return json_response({}, status_code=404)
+
+    return handler
+
+
 def test_version_exits_zero_and_prints_the_version(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -192,3 +225,63 @@ def test_successful_run_writes_audit_json_and_returns_zero(
     data = json.loads(json_path.read_text(encoding="utf-8"))
     assert data["deduction_document_count"] >= 0
     assert data["api_version"] == "10"
+
+
+def test_run_missing_token_file_returns_2_and_names_the_path(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    missing = tmp_path / "does-not-exist.txt"
+    code = main(["run", "--token-file", str(missing)])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert captured.out == ""
+    assert str(missing) in captured.err
+
+
+def test_bad_run_flag_is_a_usage_error() -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["run", "--not-a-real-flag"])
+    assert exc_info.value.code == 2
+
+
+def test_run_success_writes_csvs_and_prints_the_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    token_file = _write_token(tmp_path)
+    _install_mock_client(monkeypatch, _run_handler())
+    output = tmp_path / "out"
+    code = main(["run", "--token-file", str(token_file), "--output", str(output)])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "1 accepted, 0 review (1 deduction documents)" in captured.out
+    assert "deductions.csv written to" in captured.out
+    assert "review.csv written to" in captured.out
+    assert "note: GST field not configured" in captured.out
+    assert "note: supplier field not configured" in captured.out
+    assert (output / "deductions.csv").exists()
+    assert (output / "review.csv").exists()
+    assert not (output / "audit.json").exists()
+
+
+def test_run_missing_deduction_tag_returns_4(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    token_file = _write_token(tmp_path)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/tags/":
+            return json_response(page_payload([tag_payload(9, "income")]))
+        return json_response({}, status_code=404)
+
+    _install_mock_client(monkeypatch, handler)
+    code = main(["run", "--token-file", str(token_file), "--output", str(tmp_path / "out")])
+    captured = capsys.readouterr()
+    assert code == 4
+    assert captured.out == ""
+    assert "tax deductible" in captured.err
+    assert not (tmp_path / "out").exists()

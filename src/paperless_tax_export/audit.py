@@ -147,15 +147,17 @@ def run_audit(
     fy_end: str,
     ibkr_tag: str,
     ibkr_correspondent: str,
-    field_amount: str,
-    field_gst: str,
-    field_work_use: str,
+    field_amount: str | None,
+    field_gst: str | None,
+    field_work_use: str | None,
 ) -> AuditReport:
     """Gather lenient diagnostic findings from the live Paperless instance.
 
     Every list endpoint is fetched through the client, so auth/network/status
     failures keep their existing exception mapping. Missing tags, missing
-    fields and zero coverage are reported, never raised.
+    fields and zero coverage are reported, never raised. A ``None`` expected
+    field name means the setting is not configured; it is reported as such by
+    the renderer and never appears as "missing from Paperless".
     """
     all_tags = client.list_tags()
     matched_tags = [tag_def for tag_def in all_tags if tag_def.name == tag]
@@ -373,17 +375,23 @@ def _expected_fields(
     *,
     fields_by_name: dict[str, CustomFieldDef],
     coverage_by_field_id: dict[int, FieldCoverage],
-    field_amount: str,
-    field_gst: str,
-    field_work_use: str,
+    field_amount: str | None,
+    field_gst: str | None,
+    field_work_use: str | None,
 ) -> tuple[ExpectedFieldInfo, ...]:
-    """Check the expected field names by exact name against the live fields."""
+    """Check the expected field names by exact name against the live fields.
+
+    A ``None`` name means the setting is not configured; those fields are
+    skipped so they are never reported as "missing from Paperless".
+    """
     result: list[ExpectedFieldInfo] = []
     for name, required in (
         (field_amount, True),
         (field_gst, False),
         (field_work_use, False),
     ):
+        if name is None:
+            continue
         field = fields_by_name.get(name)
         result.append(
             ExpectedFieldInfo(
@@ -517,9 +525,10 @@ def render(report: AuditReport) -> str:
             lines.append(f"  - {info.name!r}{marker}: exists ({data_type}), {coverage_text}")
         else:
             lines.append(f"  - {info.name!r}{marker}: missing from Paperless")
-    lines.append("  Note: Settings.field_date and Settings.field_supplier are None by")
-    lines.append("  default; the row date falls back to the document `created` date and")
-    lines.append("  the supplier to the document correspondent.")
+    lines.append("  Note: Settings.field_date and Settings.field_supplier may be None;")
+    lines.append("  a None field is not configured and is never reported as missing.")
+    lines.append("  The row date falls back to the document `created` date and the")
+    lines.append("  supplier to the document correspondent.")
 
     lines.append("")
     lines.append(f"Paperless API version: {report.api_version or 'unknown'}")
