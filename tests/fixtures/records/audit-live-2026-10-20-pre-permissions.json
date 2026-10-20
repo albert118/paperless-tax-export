@@ -100,12 +100,7 @@
     "correspondent": "Interactive Brokers",
     "correspondent_document_count": 0,
     "correspondent_exists": false,
-    "correspondent_without_tag": 0,
     "realized_gains_types": [],
-    "tag": "tax-information",
-    "tag_document_count": 0,
-    "tag_exists": false,
-    "tag_with_other_correspondent": 0,
     "trade_confirmation_types": []
   },
   "server_version": "3.3.2",
