@@ -1,0 +1,19 @@
+AGENTS.md
+  s_ba5dca3cafe919::t_a5b782df4e4c29 23-28,34,36-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb58ea45620cdcdb9ea643b9553dd749b719c1bf",
+  "prompts": {},
+  "sessions": {
+    "s_ba5dca3cafe919": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb821b-02cf-4f9f-8841-94727a8ef3d0",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
