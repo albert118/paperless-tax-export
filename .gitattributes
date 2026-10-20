@@ -1,0 +1,8 @@
+# Store every text file in the repository with LF, and check it out with LF.
+# This overrides the Windows global core.autocrlf=true so the working tree matches
+# CI and Linux containers byte for byte.
+* text=auto eol=lf
+
+# Windows scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf

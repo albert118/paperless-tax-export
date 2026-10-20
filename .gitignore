@@ -104,10 +104,35 @@ cython_debug/
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
 #  and can be added to the global gitignore or merged into this file. However, if you prefer, 
 #  you could uncomment the following to ignore the entire vscode folder
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 
 # Local python venv config
 pyvenv.cfg
 
 # local dev config
 .config.local.ini
+
+# ---------------------------------------------------------------------------
+# Project: paperless-tax-export
+# ---------------------------------------------------------------------------
+
+# Secrets. The Paperless API token is never committed: no token file, no .env
+# with real values. Local runs read it from secrets/, the container from a
+# mounted secret file.
+secrets/
+*.token
+paperless-token*.txt
+
+# Generated output (CSVs and manifest). Reproducible from Paperless, never
+# committed.
+output/
+
+# Recorded data that has not been sanitised. Real receipts and IBKR statements
+# stay out of git; sanitised fixtures live in tests/fixtures/.
+tests/fixtures/raw/
+scratch/
+
+# Tool caches
+.ruff_cache/
