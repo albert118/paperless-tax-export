@@ -1,0 +1,21 @@
+AGENTS.md
+  s_ba5dca3cafe919::t_02985d725f7821 29-32
+pyproject.toml
+  s_ba5dca3cafe919::t_e5df75c3f46071 8-11,42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3371be53cb780bdda0ccf229ac0f8fb8567b6fe1",
+  "prompts": {},
+  "sessions": {
+    "s_ba5dca3cafe919": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb821b-02cf-4f9f-8841-94727a8ef3d0",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
