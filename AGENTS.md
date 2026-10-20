@@ -20,15 +20,19 @@ Outputs, written into `output/`:
 
 ## Current state
 
-Bootstrap only. These exist: `.gitignore`, `.gitattributes`, `.editorconfig`,
-`.python-version`, `.vscode/`, `README.md`, `AGENTS.md`.
+The repository builds, lints, type-checks and tests, but does not read Paperless yet.
 
-Not yet created: `pyproject.toml`, `uv.lock`, `src/paperless_tax_export/`, `tests/`,
-`Dockerfile`, `.dockerignore`, `compose.yaml`. Do not document or assume commands that
-depend on them as if they already work.
+In place: `pyproject.toml` and `uv.lock` (uv, Python 3.12), `src/paperless_tax_export/`,
+`tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,
+image build, labeler, dependabot) and the docs.
 
-`.github/` is owned by another change. Do not rewrite the workflows, dependabot or
-labeler configuration unless the task is explicitly about them.
+The CLI supports `--help` and `--version` only. There is no Paperless client, no year
+selection and no CSV writer, in that order. Do not document flags or outputs as if they
+work.
+
+CI runs ruff, ruff format check, mypy and pytest on every pull request and on pushes to
+`main`. `docker.yml` builds the image on pull requests and pushes to GHCR only on a
+release. Do not disable or weaken those checks to get a change through.
 
 ## Rules that must not be broken
 
