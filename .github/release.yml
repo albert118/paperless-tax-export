@@ -17,3 +17,6 @@ changelog:
         - title: 📃 Documentation
           labels:
               - documentation
+        - title: Other changes
+          labels:
+              - '*'
