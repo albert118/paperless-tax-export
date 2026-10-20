@@ -1,0 +1,19 @@
+LICENCE
+  s_ba5dca3cafe919::t_1f5a7baf31e701 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "024df9e9f6ef481219c0b9ffda8400b97201a40e",
+  "prompts": {},
+  "sessions": {
+    "s_ba5dca3cafe919": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb821b-02cf-4f9f-8841-94727a8ef3d0",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
