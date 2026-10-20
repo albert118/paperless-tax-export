@@ -1,0 +1,18 @@
+tests/fixtures/records/README.md
+  h_17ff3c2d94101a 32,34,45-48
+tests/fixtures/records/audit-live-2026-10-20T1527Z.json
+  h_17ff3c2d94101a 131-136
+tests/test_audit_fixtures.py
+  h_17ff3c2d94101a 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "58f7e99a99988008f401e49081d68fe8adfe7c44",
+  "prompts": {},
+  "humans": {
+    "h_17ff3c2d94101a": {
+      "author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
