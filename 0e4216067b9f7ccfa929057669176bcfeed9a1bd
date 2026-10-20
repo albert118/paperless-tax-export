@@ -1,0 +1,19 @@
+.github/release.yml
+  s_ba5dca3cafe919::t_c72e39e2381197 20-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0e4216067b9f7ccfa929057669176bcfeed9a1bd",
+  "prompts": {},
+  "sessions": {
+    "s_ba5dca3cafe919": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb821b-02cf-4f9f-8841-94727a8ef3d0",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
