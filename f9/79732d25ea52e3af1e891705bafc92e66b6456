@@ -1,0 +1,33 @@
+.github/release.yml
+  s_ba5dca3cafe919::t_6e8e201e6c2522 3,5,9,16,19
+.github/workflows/ci.yml
+  s_ba5dca3cafe919::t_fc818ba10c7b7d 38
+  s_ba5dca3cafe919::t_0213405e6ce4a1 1-37,39-41
+.github/workflows/labeler.yml
+  s_ba5dca3cafe919::t_ec4b7c417afcff 16
+.github/workflows/docker.yml
+  s_ba5dca3cafe919::t_49afcbbe9018c1 1-53
+.github/labeler.yml
+  s_ba5dca3cafe919::t_0afab6f642a103 6,10,14,20-21,26
+  s_ba5dca3cafe919::t_84d8946866af51 22
+  s_ba5dca3cafe919::t_3af1566015d22c 18
+  s_ba5dca3cafe919::t_aa77110d7579e4 19
+.github/dependabot.yml
+  s_ba5dca3cafe919::t_56ea97ca7d51ac 3-23,29,32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f979732d25ea52e3af1e891705bafc92e66b6456",
+  "prompts": {},
+  "sessions": {
+    "s_ba5dca3cafe919": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb821b-02cf-4f9f-8841-94727a8ef3d0",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
