@@ -1,24 +1,19 @@
-# .github/release.yml
-
 changelog:
     categories:
-        - title: 🎉 Exciting New Features
+        - title: 🎉 New features
           labels:
-              - frontend
-              - backend
-              - model
-              - api
+              - enhancement
         - title: 🐞 Bug fixes
           labels:
               - bug
-        - title: 🐞 Optimisations
+        - title: ⚙️ Infrastructure
           labels:
               - infrastructure
         - title: 🏡 Housekeeping and dependencies
           labels:
               - housekeeping
               - dependencies
-              - migrations
+              - tests
         - title: 📃 Documentation
           labels:
-              - documenation
+              - documentation
