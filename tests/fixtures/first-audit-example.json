@@ -1,0 +1,115 @@
+{
+  "api_version": "10",
+  "coverage": [
+    {
+      "absent_count": 0,
+      "field_id": 2,
+      "field_name": "Claimable %",
+      "null_count": 0,
+      "present_count": 0
+    },
+    {
+      "absent_count": 0,
+      "field_id": 3,
+      "field_name": "Reference",
+      "null_count": 0,
+      "present_count": 0
+    },
+    {
+      "absent_count": 0,
+      "field_id": 1,
+      "field_name": "Transaction Amount",
+      "null_count": 0,
+      "present_count": 0
+    },
+    {
+      "absent_count": 0,
+      "field_id": 4,
+      "field_name": "Transaction Date",
+      "null_count": 0,
+      "present_count": 0
+    }
+  ],
+  "custom_fields": [
+    {
+      "data_type": "float",
+      "default_currency": null,
+      "document_count": 0,
+      "id": 2,
+      "name": "Claimable %",
+      "select_options": []
+    },
+    {
+      "data_type": "string",
+      "default_currency": null,
+      "document_count": 0,
+      "id": 3,
+      "name": "Reference",
+      "select_options": []
+    },
+    {
+      "data_type": "monetary",
+      "default_currency": null,
+      "document_count": 52,
+      "id": 1,
+      "name": "Transaction Amount",
+      "select_options": []
+    },
+    {
+      "data_type": "date",
+      "default_currency": null,
+      "document_count": 0,
+      "id": 4,
+      "name": "Transaction Date",
+      "select_options": []
+    }
+  ],
+  "deduction_document_count": 0,
+  "expected_fields": [
+    {
+      "coverage": null,
+      "data_type": null,
+      "exists": false,
+      "name": "Gross Amount",
+      "required": true
+    },
+    {
+      "coverage": null,
+      "data_type": null,
+      "exists": false,
+      "name": "GST Amount",
+      "required": false
+    },
+    {
+      "coverage": {
+        "absent_count": 0,
+        "field_id": 2,
+        "field_name": "Claimable %",
+        "null_count": 0,
+        "present_count": 0
+      },
+      "data_type": "float",
+      "exists": true,
+      "name": "Claimable %",
+      "required": false
+    }
+  ],
+  "fy_end": "2026-06-30",
+  "fy_start": "2025-07-01",
+  "ibkr": {
+    "correspondent": "Interactive Brokers",
+    "correspondent_document_count": 0,
+    "correspondent_exists": false,
+    "correspondent_without_tag": 0,
+    "realized_gains_types": [],
+    "tag": "tax-information",
+    "tag_document_count": 0,
+    "tag_exists": false,
+    "tag_with_other_correspondent": 0,
+    "trade_confirmation_types": []
+  },
+  "server_version": "3.3.2",
+  "storage_paths": [],
+  "tag": "tax-deductible",
+  "tag_matches": []
+}
