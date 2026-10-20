@@ -22,7 +22,7 @@ Outputs, written into `output/`:
 
 The repository builds, lints, type-checks and tests, but does not read Paperless yet.
 
-In place: `pyproject.toml` and `uv.lock` (uv, Python 3.12), `src/paperless_tax_export/`,
+In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_export/`,
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,
 image build, labeler, dependabot) and the docs.
 
@@ -49,7 +49,7 @@ release. Do not disable or weaken those checks to get a change through.
   `float`. Dates compared as ISO strings, not datetimes.
 - **Tests never touch the network.** Recorded Paperless JSON plus an injectable
   transport (`httpx.MockTransport` or equivalent).
-- **Python 3.12**, `uv` with a committed `uv.lock`, src layout, stdlib-first. Ask before
+- **Python 3.14**, `uv` with a committed `uv.lock`, src layout, stdlib-first. Ask before
   adding a dependency and say why in the commit or PR.
 
 ## Domain facts worth knowing before changing selection logic

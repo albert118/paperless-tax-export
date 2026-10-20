@@ -11,7 +11,7 @@ Bootstrap complete. What is in place:
 
 | Path | Purpose |
 | --- | --- |
-| `pyproject.toml`, `uv.lock` | uv project, Python 3.12, pinned dependencies |
+| `pyproject.toml`, `uv.lock` | uv project, Python 3.14, pinned dependencies |
 | `src/paperless_tax_export/` | Package. The CLI supports `--help` and `--version` only |
 | `tests/` | pytest suite |
 | `Dockerfile`, `.dockerignore` | Non-root image built from a locked uv install |
@@ -78,7 +78,7 @@ uv run paperless-tax-export --help
 docker build -t paperless-tax-export .
 ```
 
-`uv` is required. Python 3.12 is pinned in `.python-version`.
+`uv` is required. Python 3.14 is pinned in `.python-version`.
 
 Fixtures recorded from the live instance are sanitised before they are committed. Real
 receipts and IBKR statements stay out of git, under `tests/fixtures/raw/` or `scratch/`.
