@@ -1,0 +1,21 @@
+.github/pull_request_template.md
+  s_ba5dca3cafe919::t_35eadb7a70970f 1-25
+.github/release-notes-template.md
+  s_ba5dca3cafe919::t_368a3f15671160 1-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3d590cacd3e72930aac3a1c44b17499e10ebe7bc",
+  "prompts": {},
+  "sessions": {
+    "s_ba5dca3cafe919": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb821b-02cf-4f9f-8841-94727a8ef3d0",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
