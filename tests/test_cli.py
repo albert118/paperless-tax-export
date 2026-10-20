@@ -172,19 +172,24 @@ def test_empty_token_file_returns_2_and_never_leaks_content(
     assert captured.out == ""
 
 
-def test_client_401_returns_3_without_leaking_the_token(
+def test_client_401_is_reported_as_warnings_and_a_failure_exit(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
     secret = "secret-token-12345"
     token_file = _write_token(tmp_path, secret)
+    output = tmp_path / "out"
     _install_mock_client(monkeypatch, lambda request: json_response({}, status_code=401))
-    code = main(["audit", "--token-file", str(token_file)])
+    code = main(["audit", "--token-file", str(token_file), "--output", str(output)])
     captured = capsys.readouterr()
+    # Every optional read failed and nothing came back, so this is not success.
     assert code == 3
     combined = captured.out + captured.err
     assert secret not in combined
+    assert "Warnings" in captured.out
+    assert "no tags visible to this token" in captured.out
+    assert (output / "audit.json").exists()
 
 
 def test_pagination_count_mismatch_returns_4(

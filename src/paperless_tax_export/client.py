@@ -205,15 +205,59 @@ class PaperlessClient:
         *,
         params: dict[str, Any] | None = None,
     ) -> httpx.Response:
-        try:
-            response = self._client.request(method, url, params=params)
-        except httpx.TransportError as exc:
-            if isinstance(exc, httpx.TimeoutException):
-                raise TransportError("the Paperless server timed out") from exc
-            raise TransportError("network error contacting the Paperless server") from exc
+        response = self._send(method, url, params=params)
+        target = self._redirect_target(response)
+        if target is not None:
+            # The resolved target carries its own query; follow at most once.
+            response = self._send("GET", target)
         self._capture_versions(response)
         self._raise_for_status(response)
         return response
+
+    def _send(
+        self,
+        method: str,
+        url: str | httpx.URL,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> httpx.Response:
+        try:
+            return self._client.request(method, url, params=params)
+        except httpx.TimeoutException as exc:
+            raise TransportError("the Paperless server timed out") from exc
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            raise TransportError(f"could not reach the Paperless server: {exc}") from exc
+
+    def _redirect_target(self, response: httpx.Response) -> httpx.URL | None:
+        """The one redirect hop this client is willing to follow, if any.
+
+        httpx does not follow redirects. We follow a single ``301``/``308`` hop
+        to the ``Location`` only when it stays on the same origin and the path
+        merely gains or loses a trailing slash, so a live instance's
+        slash-normalising redirect barely changes the request. Any other
+        redirect — a different status, a different origin, or a loop back to
+        the identical path — is reported by ``_raise_for_status`` instead of
+        being followed, and a token-bearing request is never forwarded to
+        another origin.
+        """
+        if response.status_code not in (301, 308):
+            return None
+        location = response.headers.get("Location")
+        if not location:
+            return None
+        target = response.request.url.join(location)
+        request_url = response.request.url
+        if (target.scheme, target.host, target.port) != (
+            request_url.scheme,
+            request_url.host,
+            request_url.port,
+        ):
+            return None
+        if target.path.rstrip("/") != request_url.path.rstrip("/"):
+            return None
+        if target.path == request_url.path:
+            return None
+        return target
 
     def _capture_versions(self, response: httpx.Response) -> None:
         if self._api_version is None:
@@ -226,10 +270,16 @@ class PaperlessClient:
             return
         status = response.status_code
         path = response.request.url.path
+        location = response.headers.get("Location")
+        redirected = f"; redirected to {location}" if location else ""
         if status in (401, 403):
-            raise TaxExportAuthError(f"Paperless rejected the API token (HTTP {status} for {path})")
+            raise TaxExportAuthError(
+                f"Paperless rejected the API token (HTTP {status} for {path}){redirected}"
+            )
         if status == 406:
-            raise ApiVersionError(f"Paperless does not serve API version 10 (HTTP 406 for {path})")
+            raise ApiVersionError(
+                f"Paperless does not serve API version 10 (HTTP 406 for {path}){redirected}"
+            )
         raise HttpStatusError(
-            f"Paperless returned HTTP {status} for {response.request.method} {path}"
+            f"Paperless returned HTTP {status} for {response.request.method} {path}{redirected}"
         )

@@ -60,11 +60,18 @@ failing:
   `Claimable %` are optional), and the Paperless API/server versions.
 
 The audit is a diagnostic, not a gate: missing tags, missing fields and zero coverage
-are findings and the exit code stays 0. Exit codes are 2 for bad flags or an unreadable
-or empty token file, 3 for auth/network/server errors, and 4 for pagination guard
-failures. `output/audit.json` carries counts and metadata only — never document titles,
+are findings and the exit code stays 0. Endpoints the token cannot read are recorded in
+`unavailable` and listed as warnings. Exit codes are 2 for bad flags or an unreadable or
+empty token file, 3 for an auth/network/server error on the document fetch (only made
+when exactly one tag matches) or when every optional read failed and nothing came back at
+all, and 4 for a pagination guard failure.
+`output/audit.json` carries counts and metadata only — never document titles,
 dates, field values or file names — so it is safe to copy into `tests/fixtures/` as a
 recorded fixture or share with someone else.
+
+The audit also reports how many tags, correspondents, document types and storage paths
+the token can see, lists any endpoint it could not read (console `Warnings` and the JSON
+`unavailable` list), and states the UTC timestamp and base URL the audit ran against.
 
 ## The Paperless token
 

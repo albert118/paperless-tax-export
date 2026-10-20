@@ -2,7 +2,8 @@
 
 Every file under ``tests/fixtures/records`` is a real ``dump_json`` output. These
 tests keep the recordings honest: canonical JSON, the same top-level schema
-``dump_json`` emits today, and no document-derived data.
+``dump_json`` emits today (with additive growth allowed — an older recording
+may lack keys newer versions added), and no document-derived data.
 """
 
 from __future__ import annotations
@@ -63,10 +64,17 @@ def test_recorded_audit_is_canonical_json(path: Path) -> None:
 
 @pytest.mark.parametrize("path", _RECORDS, ids=_RECORD_IDS)
 def test_recorded_audit_matches_the_current_schema(path: Path) -> None:
+    """The recorded keys must be a subset of the current keys.
+
+    Additive schema growth is allowed: an older recording legitimately lacks
+    keys newer versions of ``dump_json`` added. A key removal or rename, on the
+    other hand, leaves a recorded key unknown to today's ``dump_json`` and
+    fails here.
+    """
     recorded = json.loads(path.read_text(encoding="utf-8"))
     current = json.loads(dump_json(_minimal_report()))
 
-    assert set(recorded) == set(current)
+    assert set(recorded) <= set(current)
 
 
 @pytest.mark.parametrize("path", _RECORDS, ids=_RECORD_IDS)

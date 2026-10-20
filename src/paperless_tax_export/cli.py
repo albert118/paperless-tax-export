@@ -16,7 +16,7 @@ from pathlib import Path
 from paperless_tax_export import __version__
 from paperless_tax_export.audit import dump_json, render, run_audit
 from paperless_tax_export.client import PaperlessClient
-from paperless_tax_export.errors import EXIT_OK, SettingsError, TaxExportError
+from paperless_tax_export.errors import EXIT_NETWORK, EXIT_OK, SettingsError, TaxExportError
 from paperless_tax_export.export import run_export, unconfigured_field_notes
 from paperless_tax_export.settings import Settings
 
@@ -205,12 +205,17 @@ def _run_audit_command(settings: Settings, args: argparse.Namespace) -> int:
             field_amount=settings.field_amount,
             field_gst=settings.field_gst,
             field_work_use=settings.field_work_use,
+            base_url=settings.base_url,
         )
     print(render(report))
     if args.json_name:
         json_path = args.output / args.json_name
         json_path.parent.mkdir(parents=True, exist_ok=True)
         json_path.write_text(dump_json(report), encoding="utf-8")
+    if report.unavailable and report.tags_visible == 0 and not report.custom_fields:
+        # Every optional read failed and nothing at all came back: a bad token
+        # or an unreachable server must not look like a successful audit.
+        return EXIT_NETWORK
     return EXIT_OK
 
 

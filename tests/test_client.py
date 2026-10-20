@@ -227,6 +227,78 @@ def test_mapped_errors_carry_the_network_exit_code() -> None:
     assert "Authorization" not in message
 
 
+def test_same_origin_slash_redirect_is_followed() -> None:
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        if request.url.path == "/api/tags/":
+            return json_response(page_payload([tag_payload(1, "deductible")], count=1))
+        return json_response({}, status_code=301, headers={"Location": "/api/tags/"})
+
+    client = make_client(handler)
+    response = client._request("GET", "/api/tags")
+    assert len(requests) == 2
+    assert requests[1] == f"{BASE_URL}/api/tags/"
+    assert response.json()["results"][0]["name"] == "deductible"
+
+
+def test_cross_origin_redirect_raises_with_the_location() -> None:
+    """
+    A redirect to another origin is never followed: the token would travel with
+    the request. It raises and names the redirect target instead.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return json_response(
+            {}, status_code=301, headers={"Location": "https://other.example/api/tags/"}
+        )
+
+    client = make_client(handler)
+    with pytest.raises(HttpStatusError) as exc_info:
+        client._request("GET", "/api/tags")
+    assert "https://other.example/api/tags/" in str(exc_info.value)
+
+
+def test_redirect_back_to_the_same_path_raises_without_looping() -> None:
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        return json_response({}, status_code=301, headers={"Location": "/api/tags/"})
+
+    client = make_client(handler)
+    with pytest.raises(HttpStatusError):
+        client._request("GET", "/api/tags/")
+    assert len(requests) == 1
+
+
+def test_302_is_not_followed_and_raises_with_the_location() -> None:
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        return json_response({}, status_code=302, headers={"Location": "/api/tags/"})
+
+    client = make_client(handler)
+    with pytest.raises(HttpStatusError) as exc_info:
+        client._request("GET", "/api/tags")
+    assert len(requests) == 1
+    assert "/api/tags/" in str(exc_info.value)
+
+
+def test_error_message_never_contains_the_token() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return json_response({}, status_code=301, headers={"Location": str(request.url)})
+
+    client = make_client(handler)
+    with pytest.raises(HttpStatusError) as exc_info:
+        client._request("GET", "/api/tags")
+    message = str(exc_info.value)
+    assert TOKEN not in message
+    assert "Authorization" not in message
+
+
 def test_transport_failures_are_wrapped() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused")

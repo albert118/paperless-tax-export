@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Sequence
+from datetime import datetime
 
 import httpx
+import pytest
 from conftest import (
     correspondent_payload,
     custom_field_payload,
@@ -27,6 +29,7 @@ from paperless_tax_export.audit import (
     render,
     run_audit,
 )
+from paperless_tax_export.errors import HttpStatusError
 
 
 def _doc(
@@ -84,6 +87,7 @@ def _run(
     field_amount: str = "Gross Amount",
     field_gst: str = "GST Amount",
     field_work_use: str = "Claimable %",
+    base_url: str = "",
 ) -> AuditReport:
     client = make_client(handler)
     return run_audit(
@@ -96,6 +100,7 @@ def _run(
         field_amount=field_amount,
         field_gst=field_gst,
         field_work_use=field_work_use,
+        base_url=base_url,
     )
 
 
@@ -337,6 +342,162 @@ def test_dump_json_is_deterministic() -> None:
         ],
         fields=[custom_field_payload(10, "Gross Amount")],
     )
-    first = dump_json(_run(handler))
-    second = dump_json(_run(handler))
+    report = _run(handler)
+    first = dump_json(report)
+    second = dump_json(report)
     assert first == second
+
+
+def test_dump_of_the_same_report_is_byte_identical() -> None:
+    report = _run(
+        _make_handler(
+            tags=[tag_payload(1, "tax-deductible", document_count=1)],
+            documents=[_doc(1)],
+        ),
+        base_url="https://paperless.example.com",
+    )
+    dumped = dump_json(report)
+    assert dump_json(report) == dumped
+
+
+def test_dump_reports_base_url_recorded_at_and_visibility() -> None:
+    report = _run(
+        _make_handler(
+            tags=[tag_payload(1, "tax-deductible", document_count=1)],
+            documents=[_doc(1)],
+        ),
+        base_url="https://paperless.example.com",
+    )
+    data = json.loads(dump_json(report))
+    assert data["base_url"] == "https://paperless.example.com"
+    recorded = data["recorded_at"]
+    assert isinstance(recorded, str)
+    assert recorded.endswith("+00:00")
+    assert datetime.fromisoformat(recorded).tzinfo is not None
+    assert data["tags_visible"] == 1
+    assert data["correspondents_visible"] == 0
+    assert data["document_types_visible"] == 0
+    assert data["storage_paths_visible"] == 0
+    assert data["unavailable"] == []
+
+
+def test_deduction_tag_zero_visible_tags_reports_permissions() -> None:
+    report = _run(_make_handler(tags=[]))
+    rendered = render(report)
+    assert "no tags visible to this token — check permissions" in rendered
+
+
+def test_deduction_tag_no_match_visible_count_is_reported() -> None:
+    report = _run(_make_handler(tags=[tag_payload(1, "income")]))
+    rendered = render(report)
+    assert "no tag named 'tax-deductible' among 1 visible" in rendered
+
+
+def test_deduction_tag_match_reports_the_stored_spelling() -> None:
+    report = _run(
+        _make_handler(
+            tags=[tag_payload(1, "tax-deductible", document_count=3)],
+            documents=[_doc(1)],
+        )
+    )
+    rendered = render(report)
+    assert "'tax-deductible': 3 document(s)" in rendered
+
+
+def test_ibkr_zero_visible_identifiers_report_permissions() -> None:
+    report = _run(_make_handler(tags=[], correspondents=[]))
+    rendered = render(report)
+    assert "tag 'tax-information': no tags visible to this token — check permissions" in rendered
+    assert (
+        "correspondent 'Interactive Brokers': no correspondents visible to this token"
+        " — check permissions" in rendered
+    )
+
+
+def test_ibkr_identifiers_no_match_visible_count_is_reported() -> None:
+    report = _run(
+        _make_handler(
+            tags=[tag_payload(1, "income")],
+            correspondents=[correspondent_payload(2, "Commission Agent")],
+        )
+    )
+    rendered = render(report)
+    assert "tag 'tax-information': no tag named 'tax-information' among 1 visible" in rendered
+    assert (
+        "correspondent 'Interactive Brokers': no correspondent named"
+        " 'Interactive Brokers' among 1 visible" in rendered
+    )
+
+
+def test_deduction_tag_near_miss_candidates_are_reported() -> None:
+    report = _run(_make_handler(tags=[tag_payload(1, "Tax-Deductible", document_count=2)]))
+    rendered = render(report)
+    assert "no tag named 'tax-deductible' among 1 visible" in rendered
+    assert "candidates: 'Tax-Deductible'" in rendered
+
+
+def test_ibkr_near_miss_candidates_are_reported() -> None:
+    tags = [
+        tag_payload(2, "Tax-Information", document_count=1),
+        tag_payload(3, "income"),
+    ]
+    correspondents = [correspondent_payload(4, "Interactive  Brokers")]
+    report = _run(_make_handler(tags=tags, correspondents=correspondents))
+    ibkr = report.ibkr
+    # A near-miss is reported, never matched on.
+    assert ibkr.tag_exists is False
+    assert ibkr.correspondent_exists is False
+    rendered = render(report)
+    assert "candidates: 'Tax-Information'" in rendered
+    assert "candidates: 'Interactive  Brokers'" in rendered
+
+
+def test_failed_optional_endpoint_is_recorded_and_audit_continues() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/api/correspondents/":
+            return json_response({}, status_code=500)
+        if path == "/api/tags/":
+            return json_response(page_payload([tag_payload(1, "tax-deductible", document_count=1)]))
+        if path == "/api/documents/":
+            return json_response(page_payload([_doc(1)]))
+        if path == "/api/custom_fields/":
+            return json_response(page_payload([custom_field_payload(10, "Gross Amount")]))
+        if path == "/api/storage_paths/":
+            return json_response(
+                page_payload([storage_path_payload(4, "FY26 invoices", "2025/07")])
+            )
+        if path == "/api/document_types/":
+            return json_response(page_payload([]))
+        return json_response({}, status_code=404)
+
+    report = _run(handler)
+    assert report.correspondents_visible == 0
+    assert report.ibkr.correspondent_exists is False
+    assert any("correspondents" in entry for entry in report.unavailable)
+    assert any("HTTP 500" in entry for entry in report.unavailable)
+    rendered = render(report)
+    assert "Warnings" in rendered
+    assert "correspondents:" in rendered
+    assert "HTTP 500" in rendered
+
+
+def test_documents_fetch_remains_fatal() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/api/documents/":
+            return json_response({}, status_code=500)
+        if path == "/api/tags/":
+            return json_response(page_payload([tag_payload(1, "tax-deductible", document_count=3)]))
+        if path == "/api/custom_fields/":
+            return json_response(page_payload([custom_field_payload(10, "Gross Amount")]))
+        if path == "/api/storage_paths/":
+            return json_response(page_payload([]))
+        if path == "/api/correspondents/":
+            return json_response(page_payload([]))
+        if path == "/api/document_types/":
+            return json_response(page_payload([]))
+        return json_response({}, status_code=404)
+
+    with pytest.raises(HttpStatusError):
+        _run(handler)
