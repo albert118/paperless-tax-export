@@ -7,20 +7,25 @@ can work from, plus a review list of the documents a human still has to decide o
 
 ## Status
 
-Bootstrap. The repository currently holds the development environment and documentation
-only:
+Bootstrap complete. What is in place:
 
 | Path | Purpose |
 | --- | --- |
-| `.gitignore` | Ignores secrets, generated output and unsanitised fixtures |
-| `.gitattributes` | LF in the repository and the working tree, so Windows matches CI |
-| `.editorconfig` | UTF-8, LF, four-space indent, YAML and Markdown overrides |
-| `.python-version` | Python 3.12 |
+| `pyproject.toml`, `uv.lock` | uv project, Python 3.12, pinned dependencies |
+| `src/paperless_tax_export/` | Package. The CLI supports `--help` and `--version` only |
+| `tests/` | pytest suite |
+| `Dockerfile`, `.dockerignore` | Non-root image built from a locked uv install |
+| `.gitignore`, `.gitattributes`, `.editorconfig`, `.python-version` | Environment |
 | `.vscode/` | Ruff formatter on save, pytest discovery, file nesting |
+| `.github/` | CI, image build, pull request labeler, dependabot, release notes |
 | `AGENTS.md` | Rules and context for coding agents |
 
-The Python package, tests, `Dockerfile` and compose file are not in place yet, so there
-is nothing to run at this point. Commands are added here as they land.
+Nothing reads Paperless yet. There is no client, no year selection and no CSV writer, so
+the tool only prints help and its version.
+
+CI runs on every pull request and on pushes to `main`: ruff, ruff format check, mypy and
+pytest. The container image is built on pull requests and pushed to GHCR only on a
+release.
 
 ## What it produces
 
@@ -61,12 +66,13 @@ The token is never committed and never pasted into a file that is tracked by git
 
 ## Development
 
-Once the package exists, the intended loop is:
+The loop:
 
 ```sh
 uv sync --locked
 uv run ruff check .
 uv run ruff format --check .
+uv run mypy
 uv run pytest
 uv run paperless-tax-export --help
 docker build -t paperless-tax-export .
