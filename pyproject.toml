@@ -5,7 +5,10 @@ description = "Read-only export of one financial year from Paperless-ngx to acco
 readme = "README.md"
 requires-python = ">=3.14"
 # Deliberately empty pending the Paperless client (httpx, pydantic) in a later stage.
-dependencies = []
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic>=2.14.1",
+]
 
 [project.scripts]
 paperless-tax-export = "paperless_tax_export.cli:main"
@@ -36,3 +39,4 @@ select = ["E", "F", "W", "I", "UP", "B"]
 [tool.mypy]
 files = ["src", "tests"]
 strict = true
+plugins = ["pydantic.mypy"]

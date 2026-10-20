@@ -26,9 +26,10 @@ In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_e
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,
 image build, labeler, dependabot) and the docs.
 
-The CLI supports `--help` and `--version` only. There is no Paperless client, no year
-selection and no CSV writer, in that order. Do not document flags or outputs as if they
-work.
+The CLI supports `--help` and `--version` only. The library already has a read-only
+Paperless client, typed API models, amount and date parsing, and financial-year
+selection, but none of it is wired to the CLI. There is no classification, no CSV writer
+and no manifest yet.
 
 CI runs ruff, ruff format check, mypy and pytest on every pull request and on pushes to
 `main`. `docker.yml` builds the image on pull requests and pushes to GHCR only on a
