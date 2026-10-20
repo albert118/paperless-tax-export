@@ -1,0 +1,30 @@
+AGENTS.md
+  s_ba5dca3cafe919::t_f88ec7d8e72ebd 27-28,34-37,63,68-70,73-77
+tests/fixtures/records/README.md
+  h_17ff3c2d94101a 3-4,12-15,17,22-48
+README.md
+  h_17ff3c2d94101a 8-10,52,57-63,69-71
+tests/test_audit_fixtures.py
+  h_17ff3c2d94101a 4-6,16-27,32,36-48,53-66,76-85,104,107-110,115,124-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ac956426325fc49ef0435459ec0326f0272b23fc",
+  "prompts": {},
+  "humans": {
+    "h_17ff3c2d94101a": {
+      "author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_ba5dca3cafe919": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb821b-02cf-4f9f-8841-94727a8ef3d0",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
