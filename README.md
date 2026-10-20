@@ -5,8 +5,9 @@ Read-only tax export for [Paperless-ngx](https://github.com/paperless-ngx/paperl
 It reads one financial year of documents from Paperless and produces CSVs an accountant
 can work from, plus a review list of the documents a human still has to decide on.
 
-Today only the `audit` subcommand talks to Paperless; the CSV export is not wired to the
-CLI yet.
+Both `audit` and `run` talk to Paperless: `audit` reports how the live instance lines up
+with the settings, and `run` classifies the FY documents and writes `deductions.csv` and
+`review.csv`.
 
 ## What it produces
 
@@ -48,23 +49,33 @@ uv run paperless-tax-export audit \
 The audit prints a console report and writes `output/audit.json`. It reports, without
 failing:
 
-- tags matching `--tag` (default `tax-deductible`) and their document counts;
+- tags matching `--tag` (default `tax deductible`) and their document counts;
 - every custom field in the instance, with type, options and document count;
 - per-field value coverage over the FY deduction documents (present / null / absent);
 - storage paths (informational — selection is `created`-only);
 - `archived_file_name` path segments under the FY deduction documents (console only);
-- IBKR identifiers: whether `--ibkr-tag` and `--ibkr-correspondent` exist, which
-  document types match `trade confirmation` / `realized gains summary`, and near-misses
-  inside the FY deduction set;
-- whether the expected field names exist (`Gross Amount` is required; `GST Amount` and
-  `Claimable %` are optional), and the Paperless API/server versions.
+- IBKR identifiers: whether `--ibkr-correspondent` (`Interactive Brokers`) exists, which
+  document types match `trade confirmation` / `realized gains summary`, and near-misses;
+  IBKR selection is correspondent-only;
+- the configured `--tax-info-tag` (default `tax-information`): exists, document count and
+  near-misses, reported with a caveat that it is general tax metadata, not IBKR-specific;
+- whether the expected field names exist (`Transaction Amount` is required; `GST Amount`
+  and `Claimable %` are optional), and the Paperless API/server versions.
 
 The audit is a diagnostic, not a gate: missing tags, missing fields and zero coverage
-are findings and the exit code stays 0. Exit codes are 2 for bad flags or an unreadable
-or empty token file, 3 for auth/network/server errors, and 4 for pagination guard
-failures. `output/audit.json` carries counts and metadata only — never document titles,
+are findings and the exit code stays 0. Endpoints the token cannot read are recorded in
+`unavailable` and listed as warnings. Exit codes are 2 for bad flags or an unreadable or
+empty token file, 3 for an auth/network/server error on the document fetch (only made
+when exactly one tag matches) or when every optional read failed and no tags,
+correspondents, document types, storage paths or custom fields came back at all, and 4
+for a pagination guard failure.
+`output/audit.json` carries counts and metadata only — never document titles,
 dates, field values or file names — so it is safe to copy into `tests/fixtures/` as a
 recorded fixture or share with someone else.
+
+The audit also reports how many tags, correspondents, document types and storage paths
+the token can see, lists any endpoint it could not read (console `Warnings` and the JSON
+`unavailable` list), and states the UTC timestamp and base URL the audit ran against.
 
 ## The Paperless token
 

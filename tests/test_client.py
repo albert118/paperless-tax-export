@@ -93,7 +93,12 @@ def test_client_follows_next_and_returns_all_documents() -> None:
     assert [doc.id for doc in documents] == [1, 2]
 
 
-def test_absolute_next_url_is_followed_verbatim() -> None:
+def test_absolute_next_url_is_reanchored_to_the_configured_origin() -> None:
+    """An absolute ``next`` is used as-is only when it already targets the origin.
+
+    The link below is already on the configured origin, so re-anchoring keeps
+    it unchanged and no rewrite is recorded.
+    """
     followed: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -112,6 +117,185 @@ def test_absolute_next_url_is_followed_verbatim() -> None:
     client = make_client(handler)
     client.list_documents(tag_id=1, created_from="a", created_to="b")
     assert followed[1] == f"{BASE_URL}/api/documents/?page=2"
+    assert client.origin_rewrites == ()
+
+
+def test_http_next_is_reanchored_to_the_configured_https_origin() -> None:
+    """The live case: the server advertises ``http`` links, the proxy answers https."""
+    followed: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        followed.append(str(request.url))
+        if request.url.params.get("page") == "2":
+            return json_response(page_payload([document_payload(2)], count=2))
+        return json_response(
+            {
+                "count": 2,
+                "next": "http://paperless.test/api/documents/?page=2",
+                "previous": None,
+                "results": [document_payload(1)],
+            }
+        )
+
+    client = PaperlessClient(
+        "https://paperless.test",
+        TOKEN,
+        transport=httpx.MockTransport(handler),
+    )
+    client.list_documents(tag_id=1, created_from="a", created_to="b")
+    assert followed[1] == "https://paperless.test/api/documents/?page=2"
+    assert len(client.origin_rewrites) == 1
+    assert "http://paperless.test/api/documents/?page=2" in client.origin_rewrites[0]
+    assert (
+        "re-anchored to https://paperless.test/api/documents/?page=2" in (client.origin_rewrites[0])
+    )
+
+
+def test_foreign_host_next_is_reanchored_to_the_configured_origin() -> None:
+    followed: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        followed.append(str(request.url))
+        if request.url.params.get("page") == "2":
+            return json_response(page_payload([document_payload(2)], count=2))
+        return json_response(
+            {
+                "count": 2,
+                "next": "https://internal.example/api/documents/?page=2",
+                "previous": None,
+                "results": [document_payload(1)],
+            }
+        )
+
+    client = make_client(handler)
+    client.list_documents(tag_id=1, created_from="a", created_to="b")
+    assert followed[1] == f"{BASE_URL}/api/documents/?page=2"
+    assert len(client.origin_rewrites) == 1
+
+
+def test_protocol_relative_next_is_reanchored_to_the_configured_origin() -> None:
+    followed: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        followed.append(str(request.url))
+        if request.url.params.get("page") == "2":
+            return json_response(page_payload([document_payload(2)], count=2))
+        return json_response(
+            {
+                "count": 2,
+                "next": "//paperless.test/api/documents/?page=2",
+                "previous": None,
+                "results": [document_payload(1)],
+            }
+        )
+
+    client = make_client(handler)
+    client.list_documents(tag_id=1, created_from="a", created_to="b")
+    assert followed[1] == f"{BASE_URL}/api/documents/?page=2"
+
+
+def test_next_path_and_query_are_preserved_when_reanchoring() -> None:
+    followed: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        followed.append(str(request.url))
+        if request.url.params.get("page") == "2":
+            return json_response(page_payload([document_payload(2)], count=2))
+        return json_response(
+            {
+                "count": 2,
+                "next": (
+                    "https://advertised.example/api/correspondents/"
+                    "?ordering=id&page=2&page_size=100"
+                ),
+                "previous": None,
+                "results": [document_payload(1)],
+            }
+        )
+
+    client = make_client(handler)
+    client.list_documents(tag_id=1, created_from="a", created_to="b")
+    assert followed[1] == (f"{BASE_URL}/api/correspondents/?ordering=id&page=2&page_size=100")
+
+
+def test_next_reanchoring_keeps_the_base_urls_subpath() -> None:
+    followed: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        followed.append(str(request.url))
+        if request.url.params.get("page") == "2":
+            return json_response(page_payload([document_payload(2)], count=2))
+        return json_response(
+            {
+                "count": 2,
+                "next": "https://paperless.test/api/documents/?page=2",
+                "previous": None,
+                "results": [document_payload(1)],
+            }
+        )
+
+    client = PaperlessClient(
+        "http://paperless.test/live",
+        TOKEN,
+        transport=httpx.MockTransport(handler),
+    )
+    client.list_documents(tag_id=1, created_from="a", created_to="b")
+    assert followed[1] == "http://paperless.test/live/api/documents/?page=2"
+    assert len(client.origin_rewrites) == 1
+
+
+def test_next_already_carrying_the_base_subpath_is_not_doubled() -> None:
+    followed: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        followed.append(str(request.url))
+        if request.url.params.get("page") == "2":
+            return json_response(page_payload([document_payload(2)], count=2))
+        return json_response(
+            {
+                "count": 2,
+                "next": "https://paperless.test/live/api/documents/?page=2",
+                "previous": None,
+                "results": [document_payload(1)],
+            }
+        )
+
+    client = PaperlessClient(
+        "http://paperless.test/live",
+        TOKEN,
+        transport=httpx.MockTransport(handler),
+    )
+    client.list_documents(tag_id=1, created_from="a", created_to="b")
+    assert followed[1] == "http://paperless.test/live/api/documents/?page=2"
+    # The advertised https link is re-anchored (scheme change), but its path —
+    # which already carries the base subpath — is not doubled.
+    assert len(client.origin_rewrites) == 1
+    assert "paperless.test/live/api/documents/?page=2" in client.origin_rewrites[0]
+
+
+def test_reanchored_next_keeps_the_token_on_the_configured_origin() -> None:
+    """The Authorization header never travels to the host the server advertises."""
+    captured_hosts: list[str] = []
+    captured_auth: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_hosts.append(request.url.host)
+        captured_auth.append(request.headers.get("Authorization", ""))
+        if request.url.params.get("page") == "2":
+            return json_response(page_payload([document_payload(2)], count=2))
+        return json_response(
+            {
+                "count": 2,
+                "next": "https://evil.example/api/documents/?page=2",
+                "previous": None,
+                "results": [document_payload(1)],
+            }
+        )
+
+    client = make_client(handler)
+    client.list_documents(tag_id=1, created_from="a", created_to="b")
+    assert captured_hosts == ["paperless.test", "paperless.test"]
+    assert captured_auth == [f"Token {TOKEN}", f"Token {TOKEN}"]
 
 
 def test_relative_next_url_is_resolved_against_the_base_url() -> None:
@@ -225,6 +409,90 @@ def test_mapped_errors_carry_the_network_exit_code() -> None:
     message = str(exc_info.value)
     assert "Token" not in message
     assert "Authorization" not in message
+
+
+def test_same_origin_slash_redirect_is_followed() -> None:
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        if request.url.path == "/api/tags/":
+            return json_response(page_payload([tag_payload(1, "deductible")], count=1))
+        return json_response({}, status_code=301, headers={"Location": "/api/tags/"})
+
+    client = make_client(handler)
+    response = client._request("GET", "/api/tags")
+    assert len(requests) == 2
+    assert requests[1] == f"{BASE_URL}/api/tags/"
+    assert response.json()["results"][0]["name"] == "deductible"
+
+
+def test_cross_origin_redirect_raises_with_the_location() -> None:
+    """
+    A redirect to another origin is never followed: the token would travel with
+    the request. It raises and names the redirect target instead.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return json_response(
+            {}, status_code=301, headers={"Location": "https://other.example/api/tags/"}
+        )
+
+    client = make_client(handler)
+    with pytest.raises(HttpStatusError) as exc_info:
+        client._request("GET", "/api/tags")
+    assert "https://other.example/api/tags/" in str(exc_info.value)
+
+
+def test_redirect_back_to_the_same_path_raises_without_looping() -> None:
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        return json_response({}, status_code=301, headers={"Location": "/api/tags/"})
+
+    client = make_client(handler)
+    with pytest.raises(HttpStatusError):
+        client._request("GET", "/api/tags/")
+    assert len(requests) == 1
+
+
+def test_302_is_not_followed_and_raises_with_the_location() -> None:
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        return json_response({}, status_code=302, headers={"Location": "/api/tags/"})
+
+    client = make_client(handler)
+    with pytest.raises(HttpStatusError) as exc_info:
+        client._request("GET", "/api/tags")
+    assert len(requests) == 1
+    assert "/api/tags/" in str(exc_info.value)
+
+
+def test_error_message_never_contains_the_token() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return json_response({}, status_code=301, headers={"Location": str(request.url)})
+
+    client = make_client(handler)
+    with pytest.raises(HttpStatusError) as exc_info:
+        client._request("GET", "/api/tags")
+    message = str(exc_info.value)
+    assert TOKEN not in message
+    assert "Authorization" not in message
+
+
+def test_error_message_contains_the_full_request_url() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return json_response({}, status_code=500)
+
+    client = make_client(handler)
+    with pytest.raises(HttpStatusError) as exc_info:
+        client._request("GET", "/api/tags", params={"page": "2"})
+    message = str(exc_info.value)
+    assert message.startswith("Paperless returned HTTP 500 for GET ")
+    assert f"{BASE_URL}/api/tags?page=2" in message
 
 
 def test_transport_failures_are_wrapped() -> None:

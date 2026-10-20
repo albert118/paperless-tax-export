@@ -4,9 +4,18 @@
 tag, zero matching documents, missing fields, zero coverage) still produces a
 report and the CLI exits 0. The audit never calls ``resolve_tag`` or
 ``resolve_fields``, so it reports lenient findings instead of exiting on
-configuration mismatches. Client failures keep their existing mapping
-(auth/network/status -> exit 3); bad flags and unreadable or empty token files
-map to exit 2.
+configuration mismatches. Paperless permissions are per object type, so the
+report records how many tags, correspondents, document types and storage paths
+the token can see, plus the base URL and UTC timestamp the audit ran against
+and any non-fatal ``notes`` (such as the client's record of ``next`` links it
+re-anchored to the configured origin).
+
+The optional list reads are resilient: a tags, custom-fields, storage-paths,
+correspondents or document-types fetch that raises an auth, status or
+transport error is recorded in ``unavailable`` and treated as an empty list,
+and the audit continues. The documents fetch (only made when exactly one tag
+matches) stays fatal and keeps the exit-code mapping to 3; bad flags and
+unreadable or empty token files map to exit 2.
 
 Sanitisation (structural, not a scrub)
 --------------------------------------
@@ -15,17 +24,27 @@ holds aggregates only: no per-document title, document id, date, custom-field
 value, ``archived_file_name`` string or monetary value may enter the report.
 The one document-derived aggregate is the ``archived_file_name`` first/second
 path-segment count summary, which ``dump_json`` never emits; those segment
-strings are rendered only by ``render()`` for the owner's console.
+strings are rendered only by ``render()`` for the owner's console. The base
+URL, run timestamp, visibility counts, the ``unavailable`` endpoint list and
+the value-neutral ``notes`` observations (including the client's
+origin-rewrite records) are structural metadata and never carry the API token.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from paperless_tax_export.client import PaperlessClient
+from paperless_tax_export.errors import (
+    ApiVersionError,
+    HttpStatusError,
+    TaxExportAuthError,
+    TransportError,
+)
 from paperless_tax_export.models import (
     Correspondent,
     CustomFieldDef,
@@ -94,18 +113,33 @@ class SegmentCount:
 
 @dataclass(frozen=True, slots=True)
 class IbkrFindings:
-    """How the IBKR identifiers line up with the configured names."""
+    """How the IBKR correspondent lines up with the configured name.
 
-    tag_name: str
-    tag_exists: bool
-    tag_document_count: int
+    IBKR selection is correspondent-only; the ``tax-information`` tag is
+    general tax metadata and is reported separately as ``TagMetadata``.
+    """
+
     correspondent_name: str
     correspondent_exists: bool
     correspondent_document_count: int
     trade_confirmation_types: tuple[str, ...]
     realized_gains_types: tuple[str, ...]
-    correspondent_without_tag: int
-    tag_with_other_correspondent: int
+    correspondent_candidates: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class TagMetadata:
+    """General metadata about one configured tag name.
+
+    The ``tax-information`` tag is general tax metadata, not an IBKR-specific
+    marker, so the audit reports it for what it is instead of folding it into
+    the IBKR findings.
+    """
+
+    name: str
+    exists: bool
+    document_count: int
+    candidates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,9 +168,19 @@ class AuditReport:
     archived_first_segments: tuple[SegmentCount, ...]
     archived_second_segments: tuple[SegmentCount, ...]
     ibkr: IbkrFindings
+    tax_metadata_tag: TagMetadata
     expected_fields: tuple[ExpectedFieldInfo, ...]
     api_version: str | None
     server_version: str | None
+    base_url: str = ""
+    recorded_at: str = ""
+    tags_visible: int = 0
+    correspondents_visible: int = 0
+    document_types_visible: int = 0
+    storage_paths_visible: int = 0
+    unavailable: tuple[str, ...] = ()
+    tag_candidates: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
 
 
 def run_audit(
@@ -145,26 +189,37 @@ def run_audit(
     tag: str,
     fy_start: str,
     fy_end: str,
-    ibkr_tag: str,
+    tax_info_tag: str,
     ibkr_correspondent: str,
     field_amount: str | None,
     field_gst: str | None,
     field_work_use: str | None,
+    base_url: str = "",
 ) -> AuditReport:
     """Gather lenient diagnostic findings from the live Paperless instance.
 
-    Every list endpoint is fetched through the client, so auth/network/status
-    failures keep their existing exception mapping. Missing tags, missing
-    fields and zero coverage are reported, never raised. A ``None`` expected
-    field name means the setting is not configured; it is reported as such by
-    the renderer and never appears as "missing from Paperless".
+    Every list endpoint is fetched through the client. The optional reads —
+    tags, custom fields, storage paths, correspondents and document types —
+    survive client failures: a raised ``TaxExportError`` is recorded in
+    ``unavailable`` and the endpoint is treated as empty, so the audit keeps
+    going and reports what a half-visible token could actually see. The
+    documents fetch (only made when exactly one tag matches) stays fatal.
+    Missing tags, missing fields and zero coverage are reported, never raised.
+    A ``None`` expected field name means the setting is not configured; it is
+    reported as such by the renderer and never appears as "missing from
+    Paperless". The client's record of re-anchored ``next`` links is carried
+    into ``notes`` as non-fatal observations.
     """
-    all_tags = client.list_tags()
+    recorded_at = datetime.now(UTC).replace(microsecond=0).isoformat()
+
+    unavailable: list[str] = []
+    all_tags = _optional_read(client.list_tags, "tags", unavailable)
     matched_tags = [tag_def for tag_def in all_tags if tag_def.name == tag]
     tag_matches = tuple(
         TagFinding(name=tag_def.name, document_count=tag_def.document_count)
         for tag_def in matched_tags
     )
+    tag_candidates = _near_miss_names((tag_def.name for tag_def in all_tags), tag)
 
     documents: tuple[Document, ...] = ()
     if len(matched_tags) == 1:
@@ -176,7 +231,7 @@ def run_audit(
             )
         )
 
-    fields = client.list_custom_fields()
+    fields = _optional_read(client.list_custom_fields, "custom_fields", unavailable)
     custom_fields = tuple(
         sorted((_field_info(field) for field in fields), key=lambda info: info.name)
     )
@@ -188,6 +243,7 @@ def run_audit(
     )
     coverage_by_field_id = {cov.field_id: cov for cov in coverage}
 
+    storage_path_rows = _optional_read(client.list_storage_paths, "storage_paths", unavailable)
     storage_paths = tuple(
         sorted(
             (
@@ -197,7 +253,7 @@ def run_audit(
                     path=storage_path.path,
                     document_count=storage_path.document_count,
                 )
-                for storage_path in client.list_storage_paths()
+                for storage_path in storage_path_rows
             ),
             key=lambda info: (info.name, info.id),
         )
@@ -205,14 +261,14 @@ def run_audit(
 
     first_segments, second_segments = _archived_segments(documents)
 
+    correspondents = _optional_read(client.list_correspondents, "correspondents", unavailable)
+    document_types = _optional_read(client.list_document_types, "document_types", unavailable)
     ibkr = _ibkr_findings(
-        tags=all_tags,
-        correspondents=client.list_correspondents(),
-        document_types=client.list_document_types(),
-        documents=documents,
-        ibkr_tag=ibkr_tag,
+        correspondents=correspondents,
+        document_types=document_types,
         ibkr_correspondent=ibkr_correspondent,
     )
+    tax_metadata = _tag_metadata(name=tax_info_tag, tags=all_tags)
 
     fields_by_name = {field.name: field for field in fields}
     expected_fields = _expected_fields(
@@ -235,10 +291,70 @@ def run_audit(
         archived_first_segments=first_segments,
         archived_second_segments=second_segments,
         ibkr=ibkr,
+        tax_metadata_tag=tax_metadata,
         expected_fields=expected_fields,
         api_version=client.api_version,
         server_version=client.server_version,
+        base_url=base_url,
+        recorded_at=recorded_at,
+        tags_visible=len(all_tags),
+        correspondents_visible=len(correspondents),
+        document_types_visible=len(document_types),
+        storage_paths_visible=len(storage_path_rows),
+        unavailable=tuple(unavailable),
+        tag_candidates=tag_candidates,
+        notes=tuple(client.origin_rewrites),
     )
+
+
+def _optional_read[T](
+    read: Callable[[], Sequence[T]], label: str, unavailable: list[str]
+) -> tuple[T, ...]:
+    """Read an optional endpoint through *read*, or record the failure.
+
+    A client failure the token can recover from (auth, status or transport:
+    see ``_OPTIONAL_READ_RECOVERABLE``) is appended to *unavailable* and the
+    endpoint is treated as empty so the audit continues instead of dying on one
+    optional object type the token cannot see. Guard failures stay fatal.
+    """
+    try:
+        return tuple(read())
+    except _OPTIONAL_READ_RECOVERABLE as exc:
+        unavailable.append(f"{label}: {exc}")
+        return ()
+
+
+# Client failures an optional read can absorb: auth (401/403), API version
+# (406), other status errors and transport errors all mean "this token cannot
+# read this object type" or "the server did not answer". Guard failures
+# (pagination integrity and count guards) stay fatal: they are client-visible
+# bugs, not visibility problems, and keep their exit-code mapping.
+_OPTIONAL_READ_RECOVERABLE: tuple[type[Exception], ...] = (
+    TaxExportAuthError,
+    ApiVersionError,
+    HttpStatusError,
+    TransportError,
+)
+
+
+def _normalise_name(name: str) -> str:
+    """Normalise *name* for near-miss comparison: casefold and collapse separators.
+
+    Hyphens and underscores are treated as spaces so ``tax-deductible`` and
+    ``tax deductible`` compare equal and are reported as candidates.
+    """
+    return " ".join(name.casefold().replace("-", " ").replace("_", " ").split())
+
+
+def _near_miss_names(names: Iterable[str], target: str) -> tuple[str, ...]:
+    """Stored names that normalise to *target* but do not match it exactly.
+
+    Used for reporting only: a near-miss is a candidate for the owner to
+    compare, never an automatic match.
+    """
+    needle = _normalise_name(target)
+    candidates = [name for name in names if name != target and _normalise_name(name) == needle]
+    return tuple(sorted(candidates))
 
 
 def _field_info(field: CustomFieldDef) -> CustomFieldInfo:
@@ -311,22 +427,16 @@ def _segment_counts(counter: dict[str, int]) -> tuple[SegmentCount, ...]:
 
 def _ibkr_findings(
     *,
-    tags: Sequence[Tag],
     correspondents: Sequence[Correspondent],
     document_types: Sequence[DocumentType],
-    documents: Sequence[Document],
-    ibkr_tag: str,
     ibkr_correspondent: str,
 ) -> IbkrFindings:
-    """Aggregate the IBKR identifier checks and near-miss counts."""
-    tag_matches = [tag_def for tag_def in tags if tag_def.name == ibkr_tag]
-    ibkr_tag_ids = frozenset(tag_def.id for tag_def in tag_matches)
+    """Aggregate the IBKR correspondent checks and near-miss counts."""
     correspondent_matches = [
         correspondent
         for correspondent in correspondents
         if correspondent.name == ibkr_correspondent
     ]
-    correspondent_ids = frozenset(correspondent.id for correspondent in correspondent_matches)
 
     trade_confirmation = tuple(
         sorted(
@@ -343,22 +453,7 @@ def _ibkr_findings(
         )
     )
 
-    correspondent_without_tag = 0
-    tag_with_other_correspondent = 0
-    for document in documents:
-        has_ibkr_tag = bool(ibkr_tag_ids.intersection(document.tags))
-        has_target_correspondent = (
-            document.correspondent is not None and document.correspondent in correspondent_ids
-        )
-        if has_target_correspondent and not has_ibkr_tag:
-            correspondent_without_tag += 1
-        if has_ibkr_tag and not has_target_correspondent:
-            tag_with_other_correspondent += 1
-
     return IbkrFindings(
-        tag_name=ibkr_tag,
-        tag_exists=bool(tag_matches),
-        tag_document_count=sum(tag_def.document_count for tag_def in tag_matches),
         correspondent_name=ibkr_correspondent,
         correspondent_exists=bool(correspondent_matches),
         correspondent_document_count=sum(
@@ -366,8 +461,21 @@ def _ibkr_findings(
         ),
         trade_confirmation_types=trade_confirmation,
         realized_gains_types=realized_gains,
-        correspondent_without_tag=correspondent_without_tag,
-        tag_with_other_correspondent=tag_with_other_correspondent,
+        correspondent_candidates=_near_miss_names(
+            (correspondent.name for correspondent in correspondents),
+            ibkr_correspondent,
+        ),
+    )
+
+
+def _tag_metadata(*, name: str, tags: Sequence[Tag]) -> TagMetadata:
+    """General metadata about the configured *name* tag (exact match plus near-misses)."""
+    matches = [tag_def for tag_def in tags if tag_def.name == name]
+    return TagMetadata(
+        name=name,
+        exists=bool(matches),
+        document_count=sum(tag_def.document_count for tag_def in matches),
+        candidates=_near_miss_names((tag_def.name for tag_def in tags), name),
     )
 
 
@@ -409,9 +517,23 @@ def render(report: AuditReport) -> str:
     """Console text for the audit report (the owner sees this, not git)."""
     lines = ["Paperless audit", "===============", ""]
 
+    if report.unavailable or report.notes:
+        lines.append("Warnings")
+        lines.append("--------")
+        lines.extend(f"  {entry}" for entry in report.unavailable)
+        if report.notes:
+            lines.append("  Notes:")
+            lines.extend(f"    {note}" for note in report.notes)
+        lines.append("")
+
     lines.append(f"Deduction tag {report.tag_name!r}:")
-    if not report.tag_matches:
-        lines.append("  no matching tags — the FY deduction set is empty")
+    if report.tags_visible == 0:
+        lines.append(f"  no tags visible to this token — {_visibility_hint(report)}")
+    elif not report.tag_matches:
+        line = f"  no tag named {report.tag_name!r} among {report.tags_visible} visible"
+        if report.tag_candidates:
+            line += f"; candidates: {_names_or_none(report.tag_candidates)}"
+        lines.append(line)
     else:
         for match in report.tag_matches:
             lines.append(f"  - {match.name!r}: {match.document_count} document(s)")
@@ -482,17 +604,24 @@ def render(report: AuditReport) -> str:
     ibkr = report.ibkr
     lines.append("")
     lines.append("IBKR identifiers:")
-    if ibkr.tag_exists:
-        lines.append(f"  tag {ibkr.tag_name!r}: exists with {ibkr.tag_document_count} document(s)")
-    else:
-        lines.append(f"  tag {ibkr.tag_name!r}: missing")
     if ibkr.correspondent_exists:
         lines.append(
             f"  correspondent {ibkr.correspondent_name!r}: exists with "
             f"{ibkr.correspondent_document_count} document(s)"
         )
+    elif report.correspondents_visible == 0:
+        lines.append(
+            f"  correspondent {ibkr.correspondent_name!r}: no correspondents visible"
+            f" to this token — {_visibility_hint(report)}"
+        )
     else:
-        lines.append(f"  correspondent {ibkr.correspondent_name!r}: missing")
+        line = (
+            f"  correspondent {ibkr.correspondent_name!r}: no correspondent named "
+            f"{ibkr.correspondent_name!r} among {report.correspondents_visible} visible"
+        )
+        if ibkr.correspondent_candidates:
+            line += f"; candidates: {_names_or_none(ibkr.correspondent_candidates)}"
+        lines.append(line)
     lines.append(
         "  document types matching 'trade confirmation': "
         f"{_names_or_none(ibkr.trade_confirmation_types)}"
@@ -501,14 +630,21 @@ def render(report: AuditReport) -> str:
         "  document types matching 'realized gains summary': "
         f"{_names_or_none(ibkr.realized_gains_types)}"
     )
-    lines.append(
-        f"  in the FY deduction set: {ibkr.correspondent_without_tag} document(s) with "
-        f"correspondent {ibkr.correspondent_name!r} but without tag {ibkr.tag_name!r}"
-    )
-    lines.append(
-        f"  in the FY deduction set: {ibkr.tag_with_other_correspondent} document(s) "
-        f"with tag {ibkr.tag_name!r} but a different correspondent"
-    )
+
+    tax = report.tax_metadata_tag
+    lines.append("")
+    lines.append("Tax-information tag (general tax metadata, not IBKR-specific):")
+    if tax.exists:
+        lines.append(f"  tag {tax.name!r}: exists with {tax.document_count} document(s)")
+    elif report.tags_visible == 0:
+        lines.append(
+            f"  tag {tax.name!r}: no tags visible to this token — {_visibility_hint(report)}"
+        )
+    else:
+        line = f"  tag {tax.name!r}: no tag named {tax.name!r} among {report.tags_visible} visible"
+        if tax.candidates:
+            line += f"; candidates: {_names_or_none(tax.candidates)}"
+        lines.append(line)
 
     lines.append("")
     lines.append("Expected field names (from the Settings defaults):")
@@ -544,12 +680,22 @@ def _names_or_none(names: Sequence[str]) -> str:
     return ", ".join(repr(name) for name in names) if names else "none"
 
 
+def _visibility_hint(report: AuditReport) -> str:
+    """Explain why an object list was empty, without guessing past the evidence."""
+    if report.unavailable:
+        return "see the warnings above"
+    return "check permissions"
+
+
 def dump_json(report: AuditReport) -> str:
     """Deterministic JSON text of the audit; counts and metadata only.
 
     This is the only sanctioned committed data path: no document title, id,
     date, custom-field value, ``archived_file_name`` string or amount is ever
-    part of the payload (see the module docstring for the full rule).
+    part of the payload (see the module docstring for the full rule). The
+    base URL, run timestamp, visibility counts, the ``unavailable`` endpoint
+    list and the value-neutral ``notes`` observations (including the client's
+    recorded origin rewrites) are metadata and never carry the API token.
     """
     payload: dict[str, Any] = {
         "tag": report.tag_name,
@@ -593,16 +739,17 @@ def dump_json(report: AuditReport) -> str:
             for path in report.storage_paths
         ],
         "ibkr": {
-            "tag": report.ibkr.tag_name,
-            "tag_exists": report.ibkr.tag_exists,
-            "tag_document_count": report.ibkr.tag_document_count,
             "correspondent": report.ibkr.correspondent_name,
             "correspondent_exists": report.ibkr.correspondent_exists,
             "correspondent_document_count": report.ibkr.correspondent_document_count,
             "trade_confirmation_types": list(report.ibkr.trade_confirmation_types),
             "realized_gains_types": list(report.ibkr.realized_gains_types),
-            "correspondent_without_tag": report.ibkr.correspondent_without_tag,
-            "tag_with_other_correspondent": report.ibkr.tag_with_other_correspondent,
+        },
+        "tax_metadata_tag": {
+            "name": report.tax_metadata_tag.name,
+            "exists": report.tax_metadata_tag.exists,
+            "document_count": report.tax_metadata_tag.document_count,
+            "candidates": list(report.tax_metadata_tag.candidates),
         },
         "expected_fields": [
             {
@@ -626,5 +773,13 @@ def dump_json(report: AuditReport) -> str:
         ],
         "api_version": report.api_version,
         "server_version": report.server_version,
+        "base_url": report.base_url,
+        "recorded_at": report.recorded_at,
+        "tags_visible": report.tags_visible,
+        "correspondents_visible": report.correspondents_visible,
+        "document_types_visible": report.document_types_visible,
+        "storage_paths_visible": report.storage_paths_visible,
+        "unavailable": list(report.unavailable),
+        "notes": list(report.notes),
     }
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"

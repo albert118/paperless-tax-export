@@ -172,19 +172,24 @@ def test_empty_token_file_returns_2_and_never_leaks_content(
     assert captured.out == ""
 
 
-def test_client_401_returns_3_without_leaking_the_token(
+def test_client_401_is_reported_as_warnings_and_a_failure_exit(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
     secret = "secret-token-12345"
     token_file = _write_token(tmp_path, secret)
+    output = tmp_path / "out"
     _install_mock_client(monkeypatch, lambda request: json_response({}, status_code=401))
-    code = main(["audit", "--token-file", str(token_file)])
+    code = main(["audit", "--token-file", str(token_file), "--output", str(output)])
     captured = capsys.readouterr()
+    # Every optional read failed and nothing came back, so this is not success.
     assert code == 3
     combined = captured.out + captured.err
     assert secret not in combined
+    assert "Warnings" in captured.out
+    assert "no tags visible to this token" in captured.out
+    assert (output / "audit.json").exists()
 
 
 def test_pagination_count_mismatch_returns_4(
@@ -225,6 +230,80 @@ def test_successful_run_writes_audit_json_and_returns_zero(
     data = json.loads(json_path.read_text(encoding="utf-8"))
     assert data["deduction_document_count"] >= 0
     assert data["api_version"] == "10"
+
+
+def test_partial_read_failure_with_visible_things_elsewhere_returns_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """One failed optional read does not force exit 3 while tags were visible."""
+    token_file = _write_token(tmp_path)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/api/tags/":
+            return json_response(page_payload([tag_payload(1, "tax-deductible", document_count=2)]))
+        if path == "/api/correspondents/":
+            return json_response({}, status_code=500)
+        if path == "/api/custom_fields/":
+            return json_response(page_payload([]))
+        if path == "/api/storage_paths/":
+            return json_response(page_payload([]))
+        if path == "/api/document_types/":
+            return json_response(page_payload([]))
+        return json_response({}, status_code=404)
+
+    _install_mock_client(monkeypatch, handler)
+    code = main(["audit", "--token-file", str(token_file), "--output", str(tmp_path / "out")])
+    assert code == 0
+    assert "correspondents" in capsys.readouterr().out
+
+
+def test_one_failed_read_with_readable_custom_fields_returns_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """Tags failed and the object lists are empty, but a custom field is readable: not exit 3."""
+    token_file = _write_token(tmp_path)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/api/tags/":
+            return json_response({}, status_code=500)
+        if path == "/api/custom_fields/":
+            return json_response(page_payload([custom_field_payload(10, "Gross Amount")]))
+        if path == "/api/storage_paths/":
+            return json_response(page_payload([]))
+        if path == "/api/correspondents/":
+            return json_response(page_payload([]))
+        if path == "/api/document_types/":
+            return json_response(page_payload([]))
+        return json_response({}, status_code=404)
+
+    _install_mock_client(monkeypatch, handler)
+    code = main(["audit", "--token-file", str(token_file), "--output", str(tmp_path / "out")])
+    assert code == 0
+    assert "tags:" in capsys.readouterr().out
+
+
+def test_all_optional_reads_failed_and_nothing_came_back_returns_3(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """Every optional read failed and nothing came back: exit 3, never a clean pass."""
+    token_file = _write_token(tmp_path)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return json_response({}, status_code=500)
+
+    _install_mock_client(monkeypatch, handler)
+    code = main(["audit", "--token-file", str(token_file), "--output", str(tmp_path / "out")])
+    assert code == 3
+    captured = capsys.readouterr()
+    assert "Warnings" in captured.out
 
 
 def test_run_missing_token_file_returns_2_and_names_the_path(

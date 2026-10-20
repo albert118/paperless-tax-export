@@ -24,17 +24,17 @@ The repository builds, lints, type-checks and tests. The CLI has a working `audi
 subcommand (plus `--version`) that reads the live Paperless instance read-only and
 reports how it lines up with the export settings (`output/audit.json`). The audit is a
 diagnostic, not a gate: a missing tag, zero matching documents, missing fields and zero
-coverage are printed findings and the exit code stays 0. The `run` subcommand and the
-classification/CSV pipeline do not exist yet.
+coverage are printed findings and the exit code stays 0. The `run` subcommand
+classifies the FY documents and writes `deductions.csv` and `review.csv`.
 
 In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_export/`,
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,
 image build, labeler, dependabot) and the docs.
 
-The CLI supports `--help`, `--version` and `audit`. The library has a read-only
-Paperless client, typed API models, amount and date parsing, and financial-year
-selection; `audit` is the first wiring of those to the CLI. There is no classification,
-no CSV writer and no manifest yet.
+The CLI supports `--help`, `--version`, `audit` and `run`. The library has a
+read-only Paperless client, typed API models, amount and date parsing, and
+financial-year selection. `audit` diagnoses the live instance; `run` drives the
+classification/CSV pipeline. There is no manifest yet.
 
 CI runs ruff, ruff format check, mypy and pytest on every pull request and on pushes to
 `main`. `docker.yml` builds the image on pull requests and pushes to GHCR only on a
@@ -60,18 +60,21 @@ release. Do not disable or weaken those checks to get a change through.
 
 ## Domain facts worth knowing before changing selection logic
 
-- Selection is tag `tax-deductible` **and** `created` inside FY25-26. `created` is
+- Selection is tag `tax deductible` **and** `created` inside FY25-26. `created` is
   Paperless's parsed document date and the only date filter. Storage paths are derived
   from `created` and are not a signal.
 - The row `date` is the custom field date, falling back to `created`. A field date
   outside the FY is a review item, not an exclusion.
-- Amounts are GST-inclusive, from `Gross Amount`; GST from `GST Amount`; work use from
-  `Claimable %`. Never read `actual_*` fields.
+- Amounts are GST-inclusive, from the live field `Transaction Amount`; GST from
+  `GST Amount`; work use from `Claimable %`. The live row-date field is
+  `Transaction Date`. Never read `actual_*` fields.
 - Every document selected goes to `deductions.csv` or `review.csv`; tagged documents
   outside the FY are only counted in the manifest.
-- IBKR documents are selected by tag `tax-information` plus correspondent
-  "Interactive Brokers"; document types are a column, not a filter. A document in both
-  sets goes to review, in neither CSV.
+- IBKR selection is correspondent-only: correspondent "Interactive Brokers". The
+  `tax-information` tag is general tax metadata (190 documents, all years), not an
+  IBKR marker, and is only counted as metadata by the audit's `--tax-info-tag`.
+  Document types are a column, not a filter. A document in both sets goes to review,
+  in neither CSV.
 - The Paperless document ID is the traceability key on every row. No URLs in any CSV.
 
 ## Working style

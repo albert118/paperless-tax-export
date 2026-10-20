@@ -1,0 +1,140 @@
+{
+  "api_version": "10",
+  "base_url": "https://paperless.daedalus-project.dev/",
+  "correspondents_visible": 0,
+  "coverage": [
+    {
+      "absent_count": 13,
+      "field_id": 2,
+      "field_name": "Claimable %",
+      "null_count": 0,
+      "present_count": 0
+    },
+    {
+      "absent_count": 13,
+      "field_id": 3,
+      "field_name": "Reference",
+      "null_count": 0,
+      "present_count": 0
+    },
+    {
+      "absent_count": 11,
+      "field_id": 1,
+      "field_name": "Transaction Amount",
+      "null_count": 0,
+      "present_count": 2
+    },
+    {
+      "absent_count": 13,
+      "field_id": 4,
+      "field_name": "Transaction Date",
+      "null_count": 0,
+      "present_count": 0
+    }
+  ],
+  "custom_fields": [
+    {
+      "data_type": "float",
+      "default_currency": null,
+      "document_count": 0,
+      "id": 2,
+      "name": "Claimable %",
+      "select_options": []
+    },
+    {
+      "data_type": "string",
+      "default_currency": null,
+      "document_count": 0,
+      "id": 3,
+      "name": "Reference",
+      "select_options": []
+    },
+    {
+      "data_type": "monetary",
+      "default_currency": null,
+      "document_count": 69,
+      "id": 1,
+      "name": "Transaction Amount",
+      "select_options": []
+    },
+    {
+      "data_type": "date",
+      "default_currency": null,
+      "document_count": 0,
+      "id": 4,
+      "name": "Transaction Date",
+      "select_options": []
+    }
+  ],
+  "deduction_document_count": 13,
+  "document_types_visible": 31,
+  "expected_fields": [
+    {
+      "coverage": {
+        "absent_count": 11,
+        "field_id": 1,
+        "field_name": "Transaction Amount",
+        "null_count": 0,
+        "present_count": 2
+      },
+      "data_type": "monetary",
+      "exists": true,
+      "name": "Transaction Amount",
+      "required": true
+    },
+    {
+      "coverage": {
+        "absent_count": 13,
+        "field_id": 2,
+        "field_name": "Claimable %",
+        "null_count": 0,
+        "present_count": 0
+      },
+      "data_type": "float",
+      "exists": true,
+      "name": "Claimable %",
+      "required": false
+    }
+  ],
+  "fy_end": "2026-06-30",
+  "fy_start": "2025-07-01",
+  "ibkr": {
+    "correspondent": "Interactive Brokers",
+    "correspondent_document_count": 0,
+    "correspondent_exists": false,
+    "realized_gains_types": [
+      "realized gains summary"
+    ],
+    "trade_confirmation_types": [
+      "trade confirmation"
+    ]
+  },
+  "recorded_at": "2026-10-20T15:27:16+00:00",
+  "server_version": "3.3.2",
+  "storage_paths": [
+    {
+      "document_count": 21,
+      "id": 5,
+      "name": "Automatching Financial Year Storage Path",
+      "path": "{% set c_year = created_year | int %}{% set c_month = created_month | int %}{% if c_month >= 7 %}{{ c_year }}-{{ c_year + 1 }}{% else %}{{ c_year - 1 }}-{{ c_year }}{% endif %} Financial Year/{% if document_type %}{{ document_type }}{% else %}Unsorted{% endif %}/{{ created }}_{{ correspondent }}_{{ title }}"
+    }
+  ],
+  "storage_paths_visible": 1,
+  "tag": "tax deductible",
+  "tag_matches": [
+    {
+      "document_count": 47,
+      "name": "tax deductible"
+    }
+  ],
+  "tags_visible": 79,
+  "tax_metadata_tag": {
+    "candidates": [],
+    "document_count": 190,
+    "exists": true,
+    "name": "tax-information"
+  },
+  "unavailable": [
+    "correspondents: Paperless returned HTTP 301 for GET /api/correspondents/; redirected to https://paperless.daedalus-project.dev/api/correspondents/?ordering=id&page=2&page_size=100"
+  ]
+}
