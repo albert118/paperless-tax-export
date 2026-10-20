@@ -1,0 +1,16 @@
+src/paperless_tax_export/client.py
+  h_17ff3c2d94101a 5-8,76,94-102,173-176,208-213,215-249,322-324,329,333,336
+tests/test_client.py
+  h_17ff3c2d94101a 96-101,120-298,486-497
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1742b3917ddaf515083a7a3a4a11799b20a0c65c",
+  "prompts": {},
+  "humans": {
+    "h_17ff3c2d94101a": {
+      "author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
