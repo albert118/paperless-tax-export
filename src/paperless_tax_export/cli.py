@@ -17,6 +17,7 @@ from paperless_tax_export import __version__
 from paperless_tax_export.audit import dump_json, render, run_audit
 from paperless_tax_export.client import PaperlessClient
 from paperless_tax_export.errors import EXIT_OK, SettingsError, TaxExportError
+from paperless_tax_export.export import run_export, unconfigured_field_notes
 from paperless_tax_export.settings import Settings
 
 
@@ -106,13 +107,59 @@ def _build_parser() -> argparse.ArgumentParser:
         default="audit.json",
         help="audit JSON file name inside --output (default: audit.json)",
     )
+    run_parser = subparsers.add_parser(
+        "run",
+        help="classify one financial year and write the export CSVs",
+        description=(
+            "Classify the deduction-tagged documents for one financial year,"
+            " write deductions.csv (rows that pass every check) and review.csv"
+            " (rows with reason codes a human still has to decide on)."
+        ),
+    )
+    run_parser.add_argument(
+        "--base-url",
+        default=settings.base_url,
+        help=(f"Paperless base URL (default: {settings.base_url})"),
+    )
+    run_parser.add_argument(
+        "--token-file",
+        type=Path,
+        default=settings.token_file,
+        help=(
+            "file holding the Paperless API token; the token is read from this"
+            " file only — there is no --token flag or environment variable"
+            f" (default: {settings.token_file})"
+        ),
+    )
+    run_parser.add_argument(
+        "--tag",
+        default=settings.deduction_tag,
+        help=f"deduction tag to select (default: {settings.deduction_tag})",
+    )
+    run_parser.add_argument(
+        "--fy-start",
+        default=settings.fy_start,
+        help=f"financial-year start, ISO date (default: {settings.fy_start})",
+    )
+    run_parser.add_argument(
+        "--fy-end",
+        default=settings.fy_end,
+        help=f"financial-year end, ISO date (default: {settings.fy_end})",
+    )
+    run_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("output"),
+        help="directory the CSV files are written into (default: output/)",
+    )
     return parser
 
 
 def _dispatch(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if args.command == "audit":
-        settings = _settings_from_args(args)
-        return _run_audit_command(settings, args)
+        return _run_audit_command(_settings_from_args(args), args)
+    if args.command == "run":
+        return _run_export_command(_settings_from_run_args(args), args)
     parser.error(f"unknown command {args.command!r}")
 
 
@@ -124,6 +171,17 @@ def _settings_from_args(args: argparse.Namespace) -> Settings:
         deduction_tag=args.tag,
         ibkr_tag=args.ibkr_tag,
         ibkr_correspondent=args.ibkr_correspondent,
+        fy_start=args.fy_start,
+        fy_end=args.fy_end,
+    )
+
+
+def _settings_from_run_args(args: argparse.Namespace) -> Settings:
+    """Validate the run flags by building a frozen :class:`Settings`."""
+    return Settings(
+        base_url=args.base_url,
+        token_file=args.token_file,
+        deduction_tag=args.tag,
         fy_start=args.fy_start,
         fy_end=args.fy_end,
     )
@@ -153,6 +211,27 @@ def _run_audit_command(settings: Settings, args: argparse.Namespace) -> int:
         json_path = args.output / args.json_name
         json_path.parent.mkdir(parents=True, exist_ok=True)
         json_path.write_text(dump_json(report), encoding="utf-8")
+    return EXIT_OK
+
+
+def _run_export_command(settings: Settings, args: argparse.Namespace) -> int:
+    """Run the export and print the short summary (counts and once-notes)."""
+    token = _read_token(settings.token_file)
+    with PaperlessClient(
+        settings.base_url,
+        token,
+        page_size=settings.page_size,
+        timeout=settings.timeout_seconds,
+    ) as client:
+        result = run_export(settings, client, output=args.output)
+    for note in unconfigured_field_notes(settings):
+        print(f"note: {note}")
+    print(
+        f"{result.accepted_count} accepted, {result.review_count} review "
+        f"({result.selected_count} deduction documents)"
+    )
+    print(f"deductions.csv written to {result.output_dir / 'deductions.csv'}")
+    print(f"review.csv written to {result.output_dir / 'review.csv'}")
     return EXIT_OK
 
 

@@ -25,13 +25,13 @@ class Settings:
 
     base_url: str = "http://localhost:8000"
     token_file: Path = Path("secrets/paperless-token.txt")
-    deduction_tag: str = "tax-deductible"
+    deduction_tag: str = "tax deductible"
     ibkr_tag: str = "tax-information"
     ibkr_correspondent: str = "Interactive Brokers"
-    field_amount: str = "Gross Amount"
-    field_gst: str = "GST Amount"
-    field_work_use: str = "Claimable %"
-    field_date: str | None = None
+    field_amount: str | None = "Transaction Amount"
+    field_gst: str | None = None
+    field_work_use: str | None = "Claimable %"
+    field_date: str | None = "Transaction Date"
     field_supplier: str | None = None
     fy_start: str = "2025-07-01"
     fy_end: str = "2026-06-30"
