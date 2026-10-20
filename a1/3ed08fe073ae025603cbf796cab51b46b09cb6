@@ -1,0 +1,20 @@
+README.md
+  s_ba5dca3cafe919::t_a11567732d97f1 8-9
+  s_ba5dca3cafe919::t_6d6e2b6d0f7079 96-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a13ed08fe073ae025603cbf796cab51b46b09cb6",
+  "prompts": {},
+  "sessions": {
+    "s_ba5dca3cafe919": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26bb821b-02cf-4f9f-8841-94727a8ef3d0",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
