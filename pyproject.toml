@@ -1,0 +1,33 @@
+[project]
+name = "paperless-tax-export"
+version = "0.1.0"
+description = "Read-only export of one financial year from Paperless-ngx to accountant-ready CSVs."
+readme = "README.md"
+requires-python = ">=3.12"
+# Deliberately empty pending the Paperless client (httpx, pydantic) in a later stage.
+dependencies = []
+
+[project.scripts]
+paperless-tax-export = "paperless_tax_export.cli:main"
+
+[dependency-groups]
+dev = ["mypy>=1.13", "pytest>=8", "ruff>=0.11"]
+
+[build-system]
+requires = ["uv_build>=0.13.2,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+# Scope only: which paths `uv run mypy` checks. Strictness and plugins are
+# decided by the CI work, not here.
+[tool.mypy]
+files = ["src", "tests"]

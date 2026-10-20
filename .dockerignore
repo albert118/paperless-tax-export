@@ -1,0 +1,23 @@
+# VCS
+.git
+
+# Repo metadata and CI configuration
+.github
+
+# Local environment and tool caches
+.venv
+**/__pycache__
+.ruff_cache
+.pytest_cache
+
+# Never-built output and secrets
+output/
+secrets/
+.env*
+
+# Tests and editor config are not needed in the runtime image
+tests/
+.vscode/
+
+# README.md is intentionally NOT excluded: pyproject.toml declares it as the
+# package readme, so uv_build needs it present at build time.

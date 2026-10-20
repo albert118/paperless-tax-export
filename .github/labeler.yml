@@ -3,20 +3,24 @@ bug:
 
 documentation:
     - changed-files:
-          - any-glob-to-any-file: ['*.md']
+          - any-glob-to-any-file: ['**/*.md']
 
 housekeeping:
     - changed-files:
-          - any-glob-to-any-file: ['.*ignore', '.eslint*', '.prettier*', 'LICENCE', '.gitignore', '.gitconfig']
+          - any-glob-to-any-file: ['.gitignore', '.gitattributes', '.editorconfig', '.python-version', 'ruff.toml', '.ruff.toml', 'mypy.ini', 'LICENCE']
 
 infrastructure:
     - changed-files:
-          - any-glob-to-any-file: ['*.yml', 'Docker', '*.config', 'package.json', '.config/**', '.github/**']
+          - any-glob-to-any-file: ['Dockerfile*', '.dockerignore', 'compose*.yml', '.github/**']
 
 enhancement:
     - changed-files:
-          - any-glob-to-any-file: ['src/**', 'plugins/**', 'demo/**']
+          - any-glob-to-any-file: ['src/**', 'packages/*/src/**']
+
+tests:
+    - changed-files:
+          - any-glob-to-any-file: ['tests/**', 'packages/*/tests/**']
 
 dependencies:
     - changed-files:
-          - any-glob-to-any-file: ['package.json', 'package-lock.json', '.node-version']
+          - any-glob-to-any-file: ['pyproject.toml', 'uv.lock']
