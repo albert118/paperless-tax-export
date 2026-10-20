@@ -29,9 +29,9 @@ costs one file and no test code.
   the recursive schema check tolerates the omission, and its `ibkr` block was
   pruned of the retired tag keys so the recording stays schema-shaped.
 
-## audit-robustness-2026-10-20.json
+## audit-live-2026-10-20T1527Z.json
 
-- **Recorded:** 2026-10-20, from `https://paperless.daedalus-project.dev/`
+- **Recorded:** 2026-10-20 15:27 UTC, from `https://paperless.daedalus-project.dev/`
   (Paperless-ngx 3.3.2, API v10).
 - **Why it is kept:** it records the audit's robustness against a server whose
   absolute link builder is misconfigured. The correspondents fetch followed a
@@ -42,6 +42,10 @@ costs one file and no test code.
   `X-Forwarded-Proto`, so the server builds `http://` links. The recording is
   expected to disappear once the proxy fix lands and re-recording shows the
   correspondents coming back.
+- **Translated to the current schema.** The recording predates the IBKR-block
+  change: its `ibkr.tag*` facts were moved to the top-level
+  `tax_metadata_tag`, and the retired `correspondent_without_tag` /
+  `tag_with_other_correspondent` counters removed. No counts were altered.
 - The partial-failure facts it pins down (non-empty `unavailable` naming
   `correspondents`, `correspondents_visible == 0`, the deduction tag among
   `tag_matches`, `deduction_document_count == 13`, `tax_metadata_tag.exists`)

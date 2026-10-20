@@ -29,7 +29,7 @@ from paperless_tax_export.settings import Settings
 _RECORDS_DIR = Path(__file__).parent / "fixtures" / "records"
 _RECORDS = sorted(_RECORDS_DIR.glob("*.json"))
 _RECORD_IDS = [path.name for path in _RECORDS]
-_PARTIAL_FAILURE_RECORD = _RECORDS_DIR / "audit-robustness-2026-10-20.json"
+_PARTIAL_FAILURE_RECORD = _RECORDS_DIR / "audit-live-2026-10-20T1527Z.json"
 
 
 def _minimal_report() -> AuditReport:

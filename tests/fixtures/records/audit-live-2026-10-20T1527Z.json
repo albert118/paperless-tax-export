@@ -102,14 +102,9 @@
     "correspondent": "Interactive Brokers",
     "correspondent_document_count": 0,
     "correspondent_exists": false,
-    "correspondent_without_tag": 0,
     "realized_gains_types": [
       "realized gains summary"
     ],
-    "tag": "tax-information",
-    "tag_document_count": 190,
-    "tag_exists": true,
-    "tag_with_other_correspondent": 2,
     "trade_confirmation_types": [
       "trade confirmation"
     ]
@@ -133,6 +128,12 @@
     }
   ],
   "tags_visible": 79,
+  "tax_metadata_tag": {
+    "candidates": [],
+    "document_count": 190,
+    "exists": true,
+    "name": "tax-information"
+  },
   "unavailable": [
     "correspondents: Paperless returned HTTP 301 for GET /api/correspondents/; redirected to https://paperless.daedalus-project.dev/api/correspondents/?ordering=id&page=2&page_size=100"
   ]
