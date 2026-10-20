@@ -1,0 +1,28 @@
+README.md
+  h_17ff3c2d94101a 63-68,72-75
+src/paperless_tax_export/audit.py
+  h_17ff3c2d94101a 7-16,31,33,37-42,123-124,156-163,177,181-190,192-195,201,213,225,235,243-244,247-248,278-285,289-334,462-466,508-513,515-521,594-597,599-605,611-615,617-623,675-681,687-689,766-772
+src/paperless_tax_export/cli.py
+  h_17ff3c2d94101a 19,208,215-218
+src/paperless_tax_export/client.py
+  h_17ff3c2d94101a 208-212,217-261,273-274,276-278,280-282,284
+tests/test_audit.py
+  h_17ff3c2d94101a 7,10,32,90,103,345-347,349-503
+tests/test_audit_fixtures.py
+  h_17ff3c2d94101a 5-6,67-73,77
+tests/test_cli.py
+  h_17ff3c2d94101a 175,182,184,186,190-192
+tests/test_client.py
+  h_17ff3c2d94101a 230-301
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "12df737d11c15fad7d5d8a04980913db6b4511b0",
+  "prompts": {},
+  "humans": {
+    "h_17ff3c2d94101a": {
+      "author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
