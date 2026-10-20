@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -30,6 +31,12 @@ _RECORDS_DIR = Path(__file__).parent / "fixtures" / "records"
 _RECORDS = sorted(_RECORDS_DIR.glob("*.json"))
 _RECORD_IDS = [path.name for path in _RECORDS]
 _PARTIAL_FAILURE_RECORD = _RECORDS_DIR / "audit-live-2026-10-20T1527Z.json"
+_POST_FIX_RECORD = _RECORDS_DIR / "audit-live-2026-10-20T1554Z.json"
+
+
+def _load_record(path: Path) -> dict[str, Any]:
+    loaded: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return loaded
 
 
 def _minimal_report() -> AuditReport:
@@ -140,6 +147,69 @@ def test_partial_failure_recording_documents_the_audit_robustness_facts() -> Non
     assert any(match["name"] == Settings().deduction_tag for match in recorded["tag_matches"])
     assert recorded["deduction_document_count"] == 13
     assert recorded["tax_metadata_tag"]["exists"] is True
+
+
+def test_post_fix_recording_shows_recovered_correspondents_and_no_failures() -> None:
+    """The first run after origin pinning: every optional read succeeded."""
+    recorded = _load_record(_POST_FIX_RECORD)
+
+    assert recorded["unavailable"] == [], "origin pinning should leave nothing unreadable"
+    assert recorded["correspondents_visible"] > 0
+
+    ibkr = recorded["ibkr"]
+    assert ibkr["correspondent_exists"] is True
+    assert ibkr["correspondent_document_count"] > 0
+    assert ibkr["trade_confirmation_types"], "expected the trade confirmation document type"
+    assert ibkr["realized_gains_types"], "expected the realized gains document type"
+
+
+def test_post_fix_recording_keeps_the_origin_rewrite_visible() -> None:
+    """Re-anchoring must not hide a server that still advertises http links."""
+    recorded = _load_record(_POST_FIX_RECORD)
+
+    notes = recorded["notes"]
+    assert notes, "the re-anchored next link should be recorded as a note"
+    assert any("http://" in note and "re-anchored to https://" in note for note in notes)
+
+
+def test_post_fix_recording_matches_the_configured_names() -> None:
+    """The recording must line up with the settings the tool ships."""
+    settings = Settings()
+    recorded = _load_record(_POST_FIX_RECORD)
+
+    assert recorded["tag"] == settings.deduction_tag
+    assert [match["name"] for match in recorded["tag_matches"]] == [settings.deduction_tag]
+    assert recorded["tax_metadata_tag"]["name"] == settings.tax_info_tag
+    assert recorded["tax_metadata_tag"]["exists"] is True
+
+    expected_names = {field["name"] for field in recorded["expected_fields"]}
+    assert settings.field_amount in expected_names
+    assert recorded["deduction_document_count"] > 0
+    assert recorded["storage_paths"], "the FY storage path should be recorded"
+
+
+@pytest.mark.parametrize("path", _RECORDS, ids=_RECORD_IDS)
+def test_every_recording_states_where_and_when_it_ran(path: Path) -> None:
+    """Provenance is mandatory for new recordings; older ones predate the keys."""
+    recorded = _load_record(path)
+
+    if "recorded_at" in recorded:
+        recorded_at = recorded["recorded_at"]
+        assert isinstance(recorded_at, str)
+        assert recorded_at.endswith("+00:00"), "recorded_at must be UTC"
+    if "base_url" in recorded:
+        base_url = recorded["base_url"]
+        assert isinstance(base_url, str)
+        assert base_url.startswith("https://"), "recordings should show the https origin"
+
+
+@pytest.mark.parametrize("path", _RECORDS, ids=_RECORD_IDS)
+def test_no_recording_contains_a_token(path: Path) -> None:
+    """Recordings are committed, so no credential may ever appear in one."""
+    text = path.read_text(encoding="utf-8")
+
+    for banned in ("Authorization", "Token ", "paperless-token", "api_token"):
+        assert banned not in text
 
 
 def _assert_nested_subset(recorded: object, current: object, path: str) -> None:

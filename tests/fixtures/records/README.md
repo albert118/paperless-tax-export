@@ -46,6 +46,20 @@ costs one file and no test code.
   change: its `ibkr.tag*` facts were moved to the top-level
   `tax_metadata_tag`, and the retired `correspondent_without_tag` /
   `tag_with_other_correspondent` counters removed. No counts were altered.
+
+## audit-live-2026-10-20T1554Z.json
+
+- **Recorded:** 2026-10-20 15:54 UTC, from `https://paperless.daedalus-project.dev/`
+  (Paperless-ngx 3.3.2, API v10) — the first run after the client re-anchors
+  server-advertised `next` links to the configured origin.
+- **What it shows:** `unavailable` is empty, correspondents are visible (184),
+  the IBKR correspondent resolves with 24 documents, and the `notes` list keeps
+  the rewrite visible: the server still advertises `http://` `next` links, so
+  the proxy fix is outstanding. This is the recording that proves the fix in
+  production rather than by construction.
+- **Facts it pins:** deduction tag `tax deductible` (48 documents, 14 in the
+  FY), `Transaction Amount` present on 3 of 14, the two IBKR document types,
+  and the FY storage path with 19 documents.
 - The partial-failure facts it pins down (non-empty `unavailable` naming
   `correspondents`, `correspondents_visible == 0`, the deduction tag among
   `tag_matches`, `deduction_document_count == 13`, `tax_metadata_tag.exists`)
