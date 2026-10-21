@@ -1,0 +1,66 @@
+tests/test_env_config.py
+  s_b0836905a23abc::t_a999e3a5ab8d22 1-297,325-485
+  s_b0836905a23abc::t_335a146b469faa 298-324
+.gitignore
+  s_b0836905a23abc::t_db7aab28bc4835 122-123
+AGENTS.md
+  s_b0836905a23abc::t_8e6f6c1d5abfb6 53-60
+  s_b0836905a23abc::t_bea8f974549a9c 32-34,40
+README.md
+  s_b0836905a23abc::t_ff6fa433e6bef6 71,136-154,162-176
+  s_b0836905a23abc::t_b97a5c789b140d 155-161
+  s_b0836905a23abc::t_fb65076c896ee0 11,99-127
+pyproject.toml
+  s_b0836905a23abc::t_65c725b68c2c01 10
+src/paperless_tax_export/cli.py
+  s_b0836905a23abc::t_0d1fdeb9840aa3 12,20-25,72-73,78,80-92,146-147,152-162,164-166,235-239,241-245,251,254,263,266,275,314
+  s_b0836905a23abc::t_a035b0f44af980 246-247
+  s_b0836905a23abc::t_891cfcf146a63a 26,29
+  s_b0836905a23abc::t_f771e660383bc9 210-229
+  s_282e57b22cffc6::t_a8d828adca0dd2 341-350
+src/paperless_tax_export/env_config.py
+  s_b0836905a23abc::t_8c44f9d59f3c67 1-76,78-80,85-87,100-122
+  s_b0836905a23abc::t_108a4960feef68 77,81-84,88-97
+  s_b0836905a23abc::t_a2335a1bdd1f39 98-99
+src/paperless_tax_export/settings.py
+  s_b0836905a23abc::t_562597b30509f7 6-7
+uv.lock
+  s_b0836905a23abc::t_caa16b73f6d3fb 305,320,473-481
+src/paperless_tax_export/verify.py
+  s_b0836905a23abc::t_24ec8a6b596e80 1-252
+src/paperless_tax_export/errors.py
+  s_b0836905a23abc::t_5109effa2e385d 68-79
+tests/test_verify.py
+  s_b0836905a23abc::t_6ceb7c509a04b3 1-389,392
+  s_b0836905a23abc::t_d954aa33c435ba 390-391
+  s_b0836905a23abc::t_afcadd9c61ce24 393-395
+  s_282e57b22cffc6::t_6bf128478a961c 396
+src/paperless_tax_export/export.py
+  s_b0836905a23abc::t_9d71e2dff7fe67 27-35,164,168-169,185
+src/paperless_tax_export/manifest.py
+  s_b0836905a23abc::t_6a1503521dd01a 20-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "35ea5d8ef42e5d32eeac865c0b5acd80d0f2f98d",
+  "prompts": {},
+  "sessions": {
+    "s_282e57b22cffc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a977fe996d7333dbc",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
