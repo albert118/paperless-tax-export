@@ -1,0 +1,60 @@
+src/paperless_tax_export/selection.py
+  s_b0836905a23abc::t_c44cb37a3c850b 15
+  s_b0836905a23abc::t_994988a5556e63 84,86-92,96,100-115
+  s_b0836905a23abc::t_ee5de4da936f8c 116-117
+tests/test_selection.py
+  s_b0836905a23abc::t_f8a89aab6c38dc 97-104,106-117,119,159,162,164,173,177,196,200
+  s_b0836905a23abc::t_a3f0e43ef69917 10,14,18
+  s_b0836905a23abc::t_77fa74a2299907 136,140-142,226
+  s_b0836905a23abc::t_d44205c6f6d9f8 156-158
+  s_b0836905a23abc::t_f2bec006989490 160-161
+  s_b0836905a23abc::t_77ffa2ee61c16e 163
+  s_b0836905a23abc::t_bad2f6f618f648 165-167,170-172
+  s_b0836905a23abc::t_2e4e972268c12a 174-176
+  s_b0836905a23abc::t_45cedfe8e3e9c2 178-180,193-195
+  s_b0836905a23abc::t_17017b52470278 197-199
+  s_b0836905a23abc::t_d70af585bc4c69 201-203,223-225
+  s_b0836905a23abc::t_64a68465968dbc 227-229
+  s_41ff6f71568fbc::t_e4e82571ccfec7 168-169,181-192,204-222,230-236
+README.md
+  s_b0836905a23abc::t_8dc3374e6b3077 129-132
+tests/test_cli.py
+  s_b0836905a23abc::t_21788bea110a09 71-72
+  s_b0836905a23abc::t_47cbc1245f63ab 113
+  s_b0836905a23abc::t_c62ff0ba9ded85 16
+  s_b0836905a23abc::t_b08e1cf4f404e8 488
+  s_b0836905a23abc::t_7a284bfc398499 485-487
+  s_b0836905a23abc::t_850390e0e6ea08 489-490
+  s_41ff6f71568fbc::t_27107e1ca4d70c 364-484
+tests/conftest.py
+  s_b0836905a23abc::t_ee27ddf03ccefa 40-55
+tests/test_export.py
+  s_b0836905a23abc::t_6ab6935043a0f6 64
+  s_b0836905a23abc::t_8e564806d158b1 15
+tests/test_ibkr_index.py
+  s_41ff6f71568fbc::t_7488adf032ecb5 254-257
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7417e0ddb207cae6bfa0860b2eb3d3da5fe3fadf",
+  "prompts": {},
+  "sessions": {
+    "s_41ff6f71568fbc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a4755fa1b2331dcbc",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
