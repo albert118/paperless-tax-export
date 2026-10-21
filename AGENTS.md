@@ -26,7 +26,9 @@ reports how it lines up with the export settings (`output/audit.json`). The audi
 diagnostic, not a gate: a missing tag, zero matching documents, missing fields and zero
 coverage are printed findings and the exit code stays 0. The `run` subcommand
 classifies the FY documents and writes `deductions.csv` and `review.csv`, plus
-`ibkr-documents.csv` (the IBKR correspondent's FY documents).
+`ibkr-documents.csv` (the IBKR correspondent's FY documents) and `manifest.json`
+(no timestamp, written last). `run --expected-count N` compares N with the FY-scoped
+selected count and `run --dry-run` runs every guard and writes nothing.
 
 In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_export/`,
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,
@@ -35,7 +37,7 @@ image build, labeler, dependabot) and the docs.
 The CLI supports `--help`, `--version`, `audit` and `run`. The library has a
 read-only Paperless client, typed API models, amount and date parsing, and
 financial-year selection. `audit` diagnoses the live instance; `run` drives the
-classification/CSV pipeline. There is no manifest yet.
+classification/CSV pipeline.
 
 CI runs ruff, ruff format check, mypy and pytest on every pull request and on pushes to
 `main`. `docker.yml` builds the image on pull requests and pushes to GHCR only on a

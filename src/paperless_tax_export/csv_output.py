@@ -75,10 +75,14 @@ def write_csv(
 
     Rows are sorted by ``(date, paperless_document_id)`` before writing so the
     output is deterministic regardless of input order. The full file is built
-    in memory first and written in one ``open(..., newline="")`` call.
+    in memory first and written in one ``write_bytes`` call.
     """
-    with path.open("w", encoding="utf-8-sig", newline="") as handle:
-        handle.write(_render_csv(rows, columns))
+    path.write_bytes(render_csv_bytes(rows, columns))
+
+
+def render_csv_bytes(rows: Sequence[ClassifiedRow], columns: Sequence[tuple[str, str]]) -> bytes:
+    """The exact bytes :func:`write_csv` writes (BOM included), for hashing."""
+    return _render_csv(rows, columns).encode("utf-8-sig")
 
 
 def _render_csv(rows: Sequence[ClassifiedRow], columns: Sequence[tuple[str, str]]) -> str:
@@ -127,8 +131,12 @@ def write_ibkr_csv(path: Path, *, rows: Sequence[IbkrRow]) -> None:
     Rows are sorted by ``(created, paperless_document_id)``; with no rows the
     file holds the header only.
     """
-    with path.open("w", encoding="utf-8-sig", newline="") as handle:
-        handle.write(_render_ibkr_csv(rows))
+    path.write_bytes(render_ibkr_csv_bytes(rows))
+
+
+def render_ibkr_csv_bytes(rows: Sequence[IbkrRow]) -> bytes:
+    """The exact bytes :func:`write_ibkr_csv` writes (BOM included), for hashing."""
+    return _render_ibkr_csv(rows).encode("utf-8-sig")
 
 
 def _render_ibkr_csv(rows: Sequence[IbkrRow]) -> str:

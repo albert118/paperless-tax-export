@@ -62,6 +62,6 @@ class PaginationIntegrityError(TaxExportError):
 
 
 class CountGuardError(TaxExportError):
-    """The file count on disk disagreed with Paperless' reported count."""
+    """A count guard failed: classifier totals or the expected count disagreed."""
 
     exit_code = EXIT_GUARD

@@ -62,6 +62,8 @@ class Settings:
             raise SettingsError(
                 f"default_currency must be three uppercase letters, got {self.default_currency!r}"
             )
+        if self.expected_count is not None and self.expected_count < 0:
+            raise SettingsError(f"expected_count must not be negative, got {self.expected_count}")
         if self.timeout_seconds <= 0:
             raise SettingsError(f"timeout_seconds must be positive, got {self.timeout_seconds}")
 
