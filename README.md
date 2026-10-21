@@ -8,6 +8,7 @@ can work from, plus a review list of the documents a human still has to decide o
 Both `audit` and `run` talk to Paperless: `audit` reports how the live instance lines up
 with the settings, and `run` classifies the FY documents and writes `deductions.csv`,
 `review.csv` and `ibkr-documents.csv`.
+`verify` talks to nothing: it re-checks a finished output directory against its manifest.
 
 To run it in Docker next to Paperless-ngx, see [examples/README.md](examples/README.md).
 
@@ -96,6 +97,37 @@ uv run paperless-tax-export run   --base-url https://paperless.example.com   --t
 - Every guard (paging integrity, expected count, `accepted + review == selected`) runs
   before any file is written. `manifest.json` is written last; its hashes are of the
   exact bytes of the other files, and the same data gives a byte-identical manifest.
+
+### Verify an output directory
+
+```sh
+uv run paperless-tax-export verify --output output
+```
+
+`verify` checks a finished output directory against its `manifest.json`. It is offline: no
+token, no network, and it reads no Paperless settings or environment variables. `--output`
+defaults to the directory `run` writes into.
+
+- For each file the manifest lists, it recomputes the SHA-256 of the bytes on disk and the
+  number of data rows (header excluded, counted with a CSV parser, so a quoted title with a
+  line break is one row) and compares both with the manifest.
+- It also checks the manifest against the files: `counts.accepted` equals the rows of
+  `deductions.csv`, `counts.review` the rows of `review.csv`, `counts.ibkr_count` the rows
+  of `ibkr-documents.csv`, and `accepted + review` equals `selected_in_fy`.
+- It prints one `OK` or `MISMATCH` line per file, one line per failed check and a summary.
+  Files in the directory that the manifest does not list (`audit.json`, `manifest.json`)
+  produce one `note:` line, never a failure. It never prints file contents. A listed file
+  that is a symbolic link, a directory or a device is reported as `UNREADABLE` (exit 4);
+  `verify` does not follow links.
+- Exit 0 when everything matches. Exit 4 for any hash, row or count mismatch, or a listed
+  file that is missing. Exit 2 when `manifest.json` is missing, unreadable, not valid JSON
+  or lacks the expected keys or types.
+
+What it proves: the files are the bytes the run wrote, so it catches an accidental edit and
+a corrupted or truncated copy. What it does not prove: that the files match Paperless, or
+that nobody changed them on purpose. It is not tamper-proof, because whoever can edit a CSV
+can regenerate the manifest too. After you hand-edit `review.csv`, `verify` fails on that
+file, as it should, so run it straight after a run or against a copy.
 
 ## The Paperless token
 
