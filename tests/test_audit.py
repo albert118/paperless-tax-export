@@ -214,6 +214,79 @@ def test_archived_file_name_segments_are_counted_in_render() -> None:
     assert "'11' x1" in rendered
 
 
+def _segment_report(documents: list[dict[str, object]]) -> AuditReport:
+    return _run(
+        _make_handler(
+            tags=[tag_payload(1, "tax-deductible", document_count=len(documents))],
+            documents=documents,
+        )
+    )
+
+
+def test_archived_segments_report_counted_and_none_summing_to_the_total() -> None:
+    report = _segment_report(
+        [
+            _doc(1, archived_file_name="2025/10/a.pdf"),
+            _doc(2, archived_file_name=None),
+            _doc(3, archived_file_name=""),
+            _doc(4, archived_file_name="2025/11/b.pdf"),
+        ]
+    )
+
+    assert report.archived_version_count == 2
+    assert report.no_archived_version_count == 2
+    assert (
+        report.archived_version_count + report.no_archived_version_count
+        == report.deduction_document_count
+    )
+    rendered = render(report)
+    assert "2 with an archived version, 2 with no archived version (of 4)" in rendered
+    data = json.loads(dump_json(report))
+    assert data["archived_version_count"] == 2
+    assert data["no_archived_version_count"] == 2
+
+
+def test_archived_segments_say_so_when_no_document_has_an_archived_version() -> None:
+    report = _segment_report([_doc(1, archived_file_name=None), _doc(2, archived_file_name="")])
+
+    rendered = render(report)
+
+    assert "0 with an archived version, 2 with no archived version (of 2)" in rendered
+    assert "no archived version: no segments to report" in rendered
+    assert "first segment:" not in rendered
+
+
+def test_archived_segments_report_zero_none_when_every_document_has_a_version() -> None:
+    report = _segment_report(
+        [
+            _doc(1, archived_file_name="2025/10/a.pdf"),
+            _doc(2, archived_file_name="2025/10/b.pdf"),
+        ]
+    )
+
+    assert report.archived_version_count == 2
+    assert report.no_archived_version_count == 0
+    rendered = render(report)
+    assert "2 with an archived version, 0 with no archived version (of 2)" in rendered
+    assert "no segments to report" not in rendered
+
+
+def test_single_segment_paths_are_excluded_from_the_second_segment_counts() -> None:
+    report = _segment_report(
+        [
+            _doc(1, archived_file_name="flat.pdf"),
+            _doc(2, archived_file_name="2025/10/a.pdf"),
+        ]
+    )
+
+    assert report.archived_version_count == 2
+    assert [(s.segment, s.count) for s in report.archived_first_segments] == [
+        ("2025", 1),
+        ("flat.pdf", 1),
+    ]
+    assert [(s.segment, s.count) for s in report.archived_second_segments] == [("10", 1)]
+
+
 def test_ibkr_findings_are_correspondent_facts_only() -> None:
     tags = [
         tag_payload(1, "tax-deductible", document_count=2),
