@@ -9,6 +9,7 @@ still exit 2 with ``SystemExit``.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -16,7 +17,13 @@ from pathlib import Path
 from paperless_tax_export import __version__
 from paperless_tax_export.audit import dump_json, render, run_audit
 from paperless_tax_export.client import PaperlessClient
-from paperless_tax_export.errors import EXIT_NETWORK, EXIT_OK, SettingsError, TaxExportError
+from paperless_tax_export.env_config import (
+    EnvSources,
+    build_sources,
+    resolve_base_url,
+    resolve_token,
+)
+from paperless_tax_export.errors import EXIT_NETWORK, EXIT_OK, TaxExportError
 from paperless_tax_export.export import run_export, unconfigured_field_notes
 from paperless_tax_export.settings import Settings
 
@@ -61,17 +68,27 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument(
         "--base-url",
-        default=settings.base_url,
-        help=(f"Paperless base URL (default: {settings.base_url})"),
+        default=None,
+        help=(f"Paperless base URL; overrides PAPERLESS_BASE_URL (default: {settings.base_url})"),
     )
     audit.add_argument(
         "--token-file",
         type=Path,
-        default=settings.token_file,
+        default=None,
         help=(
-            "file holding the Paperless API token; the token is read from this"
-            " file only — there is no --token flag or environment variable"
-            f" (default: {settings.token_file})"
+            "file holding the Paperless API token; overrides PAPERLESS_TOKEN."
+            " There is no --token flag, so the token never appears in the process"
+            f" list (default: PAPERLESS_TOKEN, else {settings.token_file})"
+        ),
+    )
+    audit.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help=(
+            "dotenv file supplying PAPERLESS_TOKEN and PAPERLESS_BASE_URL; real"
+            " environment variables win over its entries. Equivalent to setting"
+            " PAPERLESS_ENV_FILE. A .env in the working directory is never loaded"
         ),
     )
     audit.add_argument(
@@ -125,17 +142,27 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument(
         "--base-url",
-        default=settings.base_url,
-        help=(f"Paperless base URL (default: {settings.base_url})"),
+        default=None,
+        help=(f"Paperless base URL; overrides PAPERLESS_BASE_URL (default: {settings.base_url})"),
     )
     run_parser.add_argument(
         "--token-file",
         type=Path,
-        default=settings.token_file,
+        default=None,
         help=(
-            "file holding the Paperless API token; the token is read from this"
-            " file only — there is no --token flag or environment variable"
-            f" (default: {settings.token_file})"
+            "file holding the Paperless API token; overrides PAPERLESS_TOKEN."
+            " There is no --token flag, so the token never appears in the process"
+            f" list (default: PAPERLESS_TOKEN, else {settings.token_file})"
+        ),
+    )
+    run_parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help=(
+            "dotenv file supplying PAPERLESS_TOKEN and PAPERLESS_BASE_URL; real"
+            " environment variables win over its entries. Equivalent to setting"
+            " PAPERLESS_ENV_FILE. A .env in the working directory is never loaded"
         ),
     )
     run_parser.add_argument(
@@ -184,17 +211,24 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _dispatch(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if args.command == "audit":
-        return _run_audit_command(_settings_from_args(args), args)
+        sources = build_sources(args.env_file, os.environ)
+        settings = _settings_from_args(args, sources)
+        return _run_audit_command(
+            settings, resolve_token(args.token_file, settings.token_file, sources), args
+        )
     if args.command == "run":
-        return _run_export_command(_settings_from_run_args(args), args)
+        sources = build_sources(args.env_file, os.environ)
+        settings = _settings_from_run_args(args, sources)
+        return _run_export_command(
+            settings, resolve_token(args.token_file, settings.token_file, sources), args
+        )
     parser.error(f"unknown command {args.command!r}")
 
 
-def _settings_from_args(args: argparse.Namespace) -> Settings:
+def _settings_from_args(args: argparse.Namespace, sources: EnvSources) -> Settings:
     """Validate the audit flags by building a frozen :class:`Settings`."""
     return Settings(
-        base_url=args.base_url,
-        token_file=args.token_file,
+        base_url=resolve_base_url(args.base_url, Settings().base_url, sources),
         deduction_tag=args.tag,
         tax_info_tag=args.tax_info_tag,
         ibkr_correspondent=args.ibkr_correspondent,
@@ -203,11 +237,10 @@ def _settings_from_args(args: argparse.Namespace) -> Settings:
     )
 
 
-def _settings_from_run_args(args: argparse.Namespace) -> Settings:
+def _settings_from_run_args(args: argparse.Namespace, sources: EnvSources) -> Settings:
     """Validate the run flags by building a frozen :class:`Settings`."""
     return Settings(
-        base_url=args.base_url,
-        token_file=args.token_file,
+        base_url=resolve_base_url(args.base_url, Settings().base_url, sources),
         deduction_tag=args.tag,
         ibkr_correspondent=args.ibkr_correspondent,
         fy_start=args.fy_start,
@@ -216,8 +249,7 @@ def _settings_from_run_args(args: argparse.Namespace) -> Settings:
     )
 
 
-def _run_audit_command(settings: Settings, args: argparse.Namespace) -> int:
-    token = _read_token(settings.token_file)
+def _run_audit_command(settings: Settings, token: str, args: argparse.Namespace) -> int:
     with PaperlessClient(
         settings.base_url,
         token,
@@ -256,9 +288,8 @@ def _run_audit_command(settings: Settings, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _run_export_command(settings: Settings, args: argparse.Namespace) -> int:
+def _run_export_command(settings: Settings, token: str, args: argparse.Namespace) -> int:
     """Run the export and print the short summary (counts and once-notes)."""
-    token = _read_token(settings.token_file)
     with PaperlessClient(
         settings.base_url,
         token,
@@ -284,19 +315,3 @@ def _run_export_command(settings: Settings, args: argparse.Namespace) -> int:
     if result.dry_run:
         print("dry run: nothing was written")
     return EXIT_OK
-
-
-def _read_token(token_file: Path) -> str:
-    """Read and strip the API token from *token_file*.
-
-    The token comes from a file only. Errors name the path but never the file's
-    content, and an empty file is rejected.
-    """
-    try:
-        content = token_file.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise SettingsError(f"cannot read token file '{token_file}': {exc}") from exc
-    token = content.strip()
-    if not token:
-        raise SettingsError(f"token file '{token_file}' is empty")
-    return token
