@@ -12,6 +12,7 @@ from conftest import (
     custom_field_payload,
     document_payload,
     document_type_payload,
+    filtered_documents_response,
     json_response,
     make_client,
     page_payload,
@@ -60,17 +61,7 @@ def make_handler(
         if path == "/api/document_types/":
             return json_response(page_payload(list(document_types)))
         if path == "/api/documents/":
-            params = request.url.params
-            if params.get("page_size") == "1" and params.get("fields") == "id":
-                return json_response(
-                    {
-                        "count": len(documents),
-                        "next": None,
-                        "previous": None,
-                        "results": [{"id": 1}] if documents else [],
-                    }
-                )
-            return json_response(page_payload(list(documents)))
+            return filtered_documents_response(request, documents)
         return json_response({}, status_code=404)
 
     return handler

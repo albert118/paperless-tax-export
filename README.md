@@ -129,6 +129,10 @@ uv run paperless-tax-export run   --base-url https://paperless.example.com   --t
 - Every guard (paging integrity, expected count, `accepted + review == selected`) runs
   before any file is written. `manifest.json` is written last; its hashes are of the
   exact bytes of the other files, and the same data gives a byte-identical manifest.
+- Paperless silently ignores filters it does not recognise, so the selection also checks
+  every returned document: a deduction document without the tag or created outside the FY
+  exits 4 (as does an IBKR document of another correspondent), and so does a tagged count
+  below the FY-selected count (Paperless changed during the run; re-run). Nothing is written.
 
 ### Verify an output directory
 

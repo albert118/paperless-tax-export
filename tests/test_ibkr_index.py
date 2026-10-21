@@ -251,7 +251,10 @@ def test_run_exits_4_and_writes_nothing_when_the_server_ignores_the_corresponden
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
-    documents = [ibkr_document(1), document_payload(2, created="2025-10-01T00:00:00Z")]
+    documents = [
+        ibkr_document(1, tags=[DEDUCTION_TAG_ID]),
+        document_payload(2, created="2025-10-01T00:00:00Z"),
+    ]
     transport = httpx.MockTransport(ignoring_filter_handler(documents))
 
     def build(
