@@ -23,9 +23,10 @@ from paperless_tax_export.env_config import (
     resolve_base_url,
     resolve_token,
 )
-from paperless_tax_export.errors import EXIT_NETWORK, EXIT_OK, TaxExportError
+from paperless_tax_export.errors import EXIT_NETWORK, EXIT_OK, TaxExportError, VerificationError
 from paperless_tax_export.export import run_export, unconfigured_field_notes
 from paperless_tax_export.settings import Settings
+from paperless_tax_export.verify import verify_directory
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -206,6 +207,26 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="run every guard and print the counts and planned files, but write nothing",
     )
+    output_default: Path = run_parser.get_default("output")
+    verify_parser = subparsers.add_parser(
+        "verify",
+        help="check a finished output directory against its manifest, offline",
+        description=(
+            "Recompute the SHA-256 and data-row count of every file listed in"
+            " manifest.json and compare them with the manifest, then check the"
+            " manifest's counts against the files. Needs no token and no network."
+            " It catches accidental edits and a corrupted copy; it does not prove"
+            " the files match Paperless and it is not tamper-proof. Exit 0 when"
+            " everything matches, 4 on any mismatch or missing listed file, 2 when"
+            " manifest.json is missing, unreadable or malformed."
+        ),
+    )
+    verify_parser.add_argument(
+        "--output",
+        type=Path,
+        default=output_default,
+        help=f"directory holding manifest.json and the output files (default: {output_default}/)",
+    )
     return parser
 
 
@@ -222,6 +243,8 @@ def _dispatch(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         return _run_export_command(
             settings, resolve_token(args.token_file, settings.token_file, sources), args
         )
+    if args.command == "verify":
+        return _run_verify_command(args)
     parser.error(f"unknown command {args.command!r}")
 
 
@@ -314,4 +337,14 @@ def _run_export_command(settings: Settings, token: str, args: argparse.Namespace
         print(f"{file.name} {verb} {result.output_dir / file.name}")
     if result.dry_run:
         print("dry run: nothing was written")
+    return EXIT_OK
+
+
+def _run_verify_command(args: argparse.Namespace) -> int:
+    """Print the verification report; a failed check exits 4 through ``VerificationError``."""
+    report = verify_directory(args.output)
+    for line in report.lines:
+        print(line)
+    if not report.ok:
+        raise VerificationError(f"{report.problems} verification problem(s) in {args.output}")
     return EXIT_OK

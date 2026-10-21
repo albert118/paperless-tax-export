@@ -24,7 +24,15 @@ from paperless_tax_export.csv_output import (
     render_ibkr_csv_bytes,
 )
 from paperless_tax_export.errors import CountGuardError
-from paperless_tax_export.manifest import ManifestCounts, PlannedFile, render_manifest
+from paperless_tax_export.manifest import (
+    DEDUCTIONS_FILE,
+    IBKR_FILE,
+    MANIFEST_FILE,
+    REVIEW_FILE,
+    ManifestCounts,
+    PlannedFile,
+    render_manifest,
+)
 from paperless_tax_export.models import Document
 from paperless_tax_export.selection import (
     resolve_fields,
@@ -153,12 +161,12 @@ def run_export(
     review_rows = tuple(classification.review)
     csv_files = (
         PlannedFile(
-            "deductions.csv",
+            DEDUCTIONS_FILE,
             render_csv_bytes(deductions_rows, DEDUCTIONS_COLUMNS),
             len(deductions_rows),
         ),
-        PlannedFile("review.csv", render_csv_bytes(review_rows, REVIEW_COLUMNS), len(review_rows)),
-        PlannedFile("ibkr-documents.csv", render_ibkr_csv_bytes(ibkr_rows), len(ibkr_rows)),
+        PlannedFile(REVIEW_FILE, render_csv_bytes(review_rows, REVIEW_COLUMNS), len(review_rows)),
+        PlannedFile(IBKR_FILE, render_ibkr_csv_bytes(ibkr_rows), len(ibkr_rows)),
     )
     manifest_bytes = render_manifest(
         settings,
@@ -174,7 +182,7 @@ def run_export(
         server_version=client.server_version,
         api_version=client.api_version,
     )
-    manifest_file = PlannedFile("manifest.json", manifest_bytes, rows=0)
+    manifest_file = PlannedFile(MANIFEST_FILE, manifest_bytes, rows=0)
     if not dry_run:
         _write_files(output, csv_files, manifest_file)
 

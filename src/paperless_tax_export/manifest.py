@@ -17,6 +17,11 @@ from typing import Any
 from paperless_tax_export import __version__
 from paperless_tax_export.settings import Settings
 
+DEDUCTIONS_FILE = "deductions.csv"
+REVIEW_FILE = "review.csv"
+IBKR_FILE = "ibkr-documents.csv"
+MANIFEST_FILE = "manifest.json"
+
 
 @dataclass(frozen=True, slots=True)
 class PlannedFile:

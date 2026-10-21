@@ -65,3 +65,15 @@ class CountGuardError(TaxExportError):
     """A count guard failed: classifier totals or the expected count disagreed."""
 
     exit_code = EXIT_GUARD
+
+
+class ManifestError(TaxExportError):
+    """``manifest.json`` is missing, unreadable, not JSON or lacks the expected shape."""
+
+    exit_code = EXIT_USAGE
+
+
+class VerificationError(TaxExportError):
+    """An output file, row count or manifest count disagrees with the manifest."""
+
+    exit_code = EXIT_GUARD
