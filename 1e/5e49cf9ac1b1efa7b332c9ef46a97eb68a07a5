@@ -1,0 +1,56 @@
+src/paperless_tax_export/cli.py
+  s_b0836905a23abc::t_f24d49523ab4ce 175-181
+  s_b0836905a23abc::t_7a049596e64f5f 277
+  s_b0836905a23abc::t_a2890f3a5a83e6 174
+tests/test_cli.py
+  s_b0836905a23abc::t_24bc21cbd165be 26-27
+  s_b0836905a23abc::t_88d5b3ca9b9f03 325-356
+tests/test_classify.py
+  s_b0836905a23abc::t_37d54ccca02dbe 922
+  s_b0836905a23abc::t_a6273a572482ac 71
+  s_b0836905a23abc::t_eab66970d2bb4a 17
+  s_b0836905a23abc::t_b39d0fbea6e5ba 95
+  s_b0836905a23abc::t_9c170a3eef2acb 865-869,871-872,874-921,923-952
+  s_b0836905a23abc::t_403d1c7191a219 870,873
+README.md
+  s_b0836905a23abc::t_fc339d9258b5b0 63-84
+src/paperless_tax_export/settings.py
+  s_b0836905a23abc::t_b9627501bcba64 66-67
+  s_b0836905a23abc::t_d75a39f4a6d85e 41
+src/paperless_tax_export/export.py
+  s_b0836905a23abc::t_9248b1cfeb4765 17
+  s_b0836905a23abc::t_b04b712fc0851e 37
+  s_b0836905a23abc::t_ae30fc49df8cee 114-118
+  s_b0836905a23abc::t_8631d1cb6cb508 249-263
+  s_b0836905a23abc::t_862dd76eb612a6 147-151
+src/paperless_tax_export/manifest.py
+  s_b0836905a23abc::t_384b8ba812bef7 69
+tests/test_export.py
+  s_b0836905a23abc::t_6d3767a81ba803 162
+  s_b0836905a23abc::t_749c315cc59073 205
+  s_b0836905a23abc::t_5bdf8adcebb3ba 124-128
+  s_b0836905a23abc::t_81debe1dd7ea92 121-123,129-161,163-170,172-179,181-204,206-209
+  s_b0836905a23abc::t_d5fd76049de361 180
+  s_b0836905a23abc::t_77e84fc91906f0 171
+src/paperless_tax_export/classify.py
+  s_b0836905a23abc::t_fe49fb72f9c540 240-241
+  s_b0836905a23abc::t_5a66d03bc2a3ed 215-216,218-221
+  s_b0836905a23abc::t_22c696f1ede6fb 63
+  s_b0836905a23abc::t_3124277a409496 191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1e5e49cf9ac1b1efa7b332c9ef46a97eb68a07a5",
+  "prompts": {},
+  "sessions": {
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
