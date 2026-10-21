@@ -17,6 +17,26 @@ BASE_URL = "http://paperless.test"
 TOKEN = "test-token"
 
 
+def paperless_filter_matches(document: dict[str, object], params: httpx.QueryParams) -> bool:
+    """Apply only the filters Paperless declares and ignore every other parameter.
+
+    Paperless's django-filter ``DocumentFilterSet`` silently drops query parameters it does
+    not declare, so a misspelt filter name returns unfiltered documents.
+    """
+    created = str(document["created"])[:10]
+    if "created__gte" in params and created < params["created__gte"]:
+        return False
+    if "created__lte" in params and created > params["created__lte"]:
+        return False
+    if "correspondent__id" in params and document["correspondent"] != int(
+        params["correspondent__id"]
+    ):
+        return False
+    tag_ids = document["tags"]
+    assert isinstance(tag_ids, list)
+    return not ("tags__id__all" in params and int(params["tags__id__all"]) not in tag_ids)
+
+
 def make_client(
     handler: Callable[[httpx.Request], httpx.Response],
     *,

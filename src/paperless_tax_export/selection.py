@@ -115,5 +115,12 @@ def select_ibkr_documents(
         created_from=fy_start,
         created_to=fy_end,
     )
+    unexpected = sum(1 for document in documents if document.correspondent != matches[0].id)
+    if unexpected:
+        raise StartupError(
+            f"{unexpected} of {len(documents)} documents listed for correspondent "
+            f"{correspondent_name!r} (id {matches[0].id}) belong to another correspondent; "
+            "the server may have ignored the correspondent filter"
+        )
     ordered = sorted(documents, key=lambda document: (document.created[:10], document.id))
     return True, tuple(ordered)
