@@ -26,6 +26,7 @@ from pathlib import Path
 from paperless_tax_export.errors import ManifestError
 from paperless_tax_export.manifest import (
     DEDUCTIONS_FILE,
+    ESTIMATE_FILE,
     INVESTMENTS_FILE,
     MANIFEST_FILE,
     REVIEW_FILE,
@@ -33,7 +34,7 @@ from paperless_tax_export.manifest import (
 )
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
-_REQUIRED_OUTPUTS = (DEDUCTIONS_FILE, REVIEW_FILE, INVESTMENTS_FILE)
+_REQUIRED_OUTPUTS = (DEDUCTIONS_FILE, REVIEW_FILE, INVESTMENTS_FILE, ESTIMATE_FILE)
 
 
 @dataclass(frozen=True, slots=True)

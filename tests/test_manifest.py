@@ -31,7 +31,13 @@ from paperless_tax_export.settings import Settings
 
 TAG_ID = 1
 IBKR_ID = 8
-OUTPUT_FILES = ("deductions.csv", "review.csv", "investments.csv", "manifest.json")
+OUTPUT_FILES = (
+    "deductions.csv",
+    "review.csv",
+    "investments.csv",
+    "estimate.csv",
+    "manifest.json",
+)
 
 
 def _documents() -> list[dict[str, object]]:
@@ -265,7 +271,7 @@ def test_dry_run_writes_nothing_and_its_counts_match_a_real_run(
     assert count_lines[0] == "1 accepted, 1 review (2 deduction documents)"
     assert count_lines[1] == "tagged 3, out of FY 1, selected in FY 2, investments 1"
     planned = [line.split(" would write ")[0] for line in dry if " would write " in line]
-    assert planned == list(OUTPUT_FILES[:3]) + ["manifest.json"]
+    assert planned == list(OUTPUT_FILES)
 
 
 def test_dry_run_still_applies_the_expected_count_guard(
@@ -305,7 +311,7 @@ def test_manifest_hashes_and_row_counts_match_the_files_on_disk(tmp_path: Path) 
     run_export(Settings(), make_client(make_handler()), output=output)
     outputs = _manifest(output)["outputs"]
     assert isinstance(outputs, dict)
-    assert sorted(outputs) == ["deductions.csv", "investments.csv", "review.csv"]
+    assert sorted(outputs) == ["deductions.csv", "estimate.csv", "investments.csv", "review.csv"]
     for name, entry in outputs.items():
         data = (output / name).read_bytes()
         assert entry["sha256"] == hashlib.sha256(data).hexdigest()

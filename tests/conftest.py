@@ -10,11 +10,18 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import httpx
+import pytest
 
 from paperless_tax_export.client import PaperlessClient
 
 BASE_URL = "http://paperless.test"
 TOKEN = "test-token"
+
+
+@pytest.fixture(autouse=True)
+def _no_marginal_rate_in_the_real_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A TAX_MARGINAL_RATE exported in the developer's shell must not change test output."""
+    monkeypatch.delenv("TAX_MARGINAL_RATE", raising=False)
 
 
 def paperless_filter_matches(document: dict[str, object], params: httpx.QueryParams) -> bool:

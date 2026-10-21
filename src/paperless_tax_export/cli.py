@@ -21,10 +21,11 @@ from paperless_tax_export.env_config import (
     EnvSources,
     build_sources,
     resolve_base_url,
+    resolve_marginal_rate,
     resolve_token,
 )
 from paperless_tax_export.errors import EXIT_NETWORK, EXIT_OK, TaxExportError, VerificationError
-from paperless_tax_export.export import run_export, unconfigured_field_notes
+from paperless_tax_export.export import ExportResult, run_export, unconfigured_field_notes
 from paperless_tax_export.settings import Settings
 from paperless_tax_export.verify import verify_directory
 
@@ -138,7 +139,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "Classify the deduction-tagged documents for one financial year,"
             " write deductions.csv (rows that pass every check) and review.csv"
             " (rows with reason codes a human still has to decide on), plus"
-            " investments.csv (the investing correspondent's documents for the year)."
+            " investments.csv (the investing correspondent's documents for the year), and"
+            " estimate.csv (an estimate of total deductions, not tax advice)."
         ),
     )
     run_parser.add_argument(
@@ -211,6 +213,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     run_parser.add_argument(
+        "--rates",
+        type=Path,
+        default=None,
+        help=(
+            "CSV file (header currency,rate_to_aud) of exchange rates to AUD used to convert"
+            " foreign amounts in estimate.csv; without it foreign amounts are left out of the"
+            " AUD figures. The marginal tax rate comes from TAX_MARGINAL_RATE, not a flag"
+        ),
+    )
+    run_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="run every guard and print the counts and planned files, but write nothing",
@@ -278,6 +290,8 @@ def _settings_from_run_args(args: argparse.Namespace, sources: EnvSources) -> Se
         fy_start=args.fy_start,
         fy_end=args.fy_end,
         expected_count=args.expected_count,
+        marginal_rate=resolve_marginal_rate(sources),
+        rates_file=args.rates,
     )
 
 
@@ -337,6 +351,7 @@ def _run_export_command(settings: Settings, token: str, args: argparse.Namespace
         f"{result.accepted_count} accepted, {result.review_count} review "
         f"({result.selected_count} deduction documents)"
     )
+    print(_estimate_summary(result))
     print(
         f"tagged {result.tagged_total}, out of FY {result.out_of_fy_count}, "
         f"selected in FY {result.selected_count}, investments {result.investments_count}"
@@ -347,6 +362,16 @@ def _run_export_command(settings: Settings, token: str, args: argparse.Namespace
     if result.dry_run:
         print("dry run: nothing was written")
     return EXIT_OK
+
+
+def _estimate_summary(result: ExportResult) -> str:
+    line = (
+        f"estimate: deductions AUD {result.estimate_deductions_aud:.2f}, "
+        f"pending AUD {result.estimate_pending_aud:.2f}"
+    )
+    if result.estimated_saving is not None:
+        line += f", estimated saving AUD {result.estimated_saving:.2f}"
+    return line
 
 
 def _run_verify_command(args: argparse.Namespace) -> int:
