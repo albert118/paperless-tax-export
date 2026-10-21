@@ -1,0 +1,30 @@
+tests/conftest.py
+  s_249138eb2176c3::t_625088f69c5847 20-39
+src/paperless_tax_export/selection.py
+  s_249138eb2176c3::t_2412f4e80f3ab5 118-124
+src/paperless_tax_export/client.py
+  s_249138eb2176c3::t_97aacf08dab2f9 140
+tests/test_manifest.py
+  s_249138eb2176c3::t_d23f9059d9b35c 21,99,101
+tests/test_ibkr_index.py
+  s_249138eb2176c3::t_5b480e2bb2e1ea 18,33,59-61,99,109-110,116-141,213-269,280
+  s_249138eb2176c3::t_50d96811fa7846 277-279
+  s_249138eb2176c3::t_ce87d8b15f9a6d 281-282
+  s_249138eb2176c3::t_41a4cb07549324 273-276,290,293-295,303-305,327-328
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b7506dd4fb13b1fee161c3f887d8a38f95fcb57f",
+  "prompts": {},
+  "sessions": {
+    "s_249138eb2176c3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "s_249138eb2176c3",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
