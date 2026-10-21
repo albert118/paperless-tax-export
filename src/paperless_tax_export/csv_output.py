@@ -17,6 +17,7 @@ from __future__ import annotations
 import csv
 import io
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from paperless_tax_export.classify import ClassifiedRow
@@ -50,6 +51,15 @@ REVIEW_COLUMNS: tuple[tuple[str, str], ...] = DEDUCTIONS_COLUMNS + (
     ("reason_codes", "text"),
     ("raw_amount", "text"),
     ("raw_date", "text"),
+)
+
+IBKR_COLUMNS: tuple[str, ...] = (
+    "paperless_document_id",
+    "title",
+    "created",
+    "document_type",
+    "correspondent",
+    "tags",
 )
 
 # Column *names* differ from the row attribute for exactly one traceability key.
@@ -97,3 +107,43 @@ def _cell(row: ClassifiedRow, name: str, kind: str) -> str:
 def _formula_guard(text: str) -> str:
     """Prefix *text* with a single quote when it could be a spreadsheet formula."""
     return "'" + text if text.startswith(_FORMULA_PREFIXES) else text
+
+
+@dataclass(frozen=True, slots=True)
+class IbkrRow:
+    """One line of the IBKR documents index; ``created`` is an ISO date."""
+
+    document_id: int
+    title: str
+    created: str
+    document_type: str | None
+    correspondent: str | None
+    tags: tuple[str, ...]
+
+
+def write_ibkr_csv(path: Path, *, rows: Sequence[IbkrRow]) -> None:
+    """Write the IBKR index under the same byte contract as :func:`write_csv`.
+
+    Rows are sorted by ``(created, paperless_document_id)``; with no rows the
+    file holds the header only.
+    """
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        handle.write(_render_ibkr_csv(rows))
+
+
+def _render_ibkr_csv(rows: Sequence[IbkrRow]) -> str:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\r\n")
+    writer.writerow(IBKR_COLUMNS)
+    for row in sorted(rows, key=lambda item: (item.created, item.document_id)):
+        writer.writerow(
+            [
+                str(row.document_id),
+                _formula_guard(row.title),
+                row.created,
+                _formula_guard(row.document_type or ""),
+                _formula_guard(row.correspondent or ""),
+                _formula_guard("; ".join(sorted(row.tags))),
+            ]
+        )
+    return buffer.getvalue()

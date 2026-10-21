@@ -119,7 +119,8 @@ def _build_parser() -> argparse.ArgumentParser:
         description=(
             "Classify the deduction-tagged documents for one financial year,"
             " write deductions.csv (rows that pass every check) and review.csv"
-            " (rows with reason codes a human still has to decide on)."
+            " (rows with reason codes a human still has to decide on), plus"
+            " ibkr-documents.csv (the IBKR correspondent's documents for the year)."
         ),
     )
     run_parser.add_argument(
@@ -151,6 +152,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--fy-end",
         default=settings.fy_end,
         help=f"financial-year end, ISO date (default: {settings.fy_end})",
+    )
+    run_parser.add_argument(
+        "--ibkr-correspondent",
+        default=settings.ibkr_correspondent,
+        help=f"IBKR correspondent name (default: {settings.ibkr_correspondent})",
     )
     run_parser.add_argument(
         "--output",
@@ -188,6 +194,7 @@ def _settings_from_run_args(args: argparse.Namespace) -> Settings:
         base_url=args.base_url,
         token_file=args.token_file,
         deduction_tag=args.tag,
+        ibkr_correspondent=args.ibkr_correspondent,
         fy_start=args.fy_start,
         fy_end=args.fy_end,
     )
@@ -245,12 +252,18 @@ def _run_export_command(settings: Settings, args: argparse.Namespace) -> int:
         result = run_export(settings, client, output=args.output)
     for note in unconfigured_field_notes(settings):
         print(f"note: {note}")
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
     print(
         f"{result.accepted_count} accepted, {result.review_count} review "
         f"({result.selected_count} deduction documents)"
     )
     print(f"deductions.csv written to {result.output_dir / 'deductions.csv'}")
     print(f"review.csv written to {result.output_dir / 'review.csv'}")
+    print(
+        f"ibkr-documents.csv written to {result.output_dir / 'ibkr-documents.csv'} "
+        f"({result.ibkr_count} documents)"
+    )
     return EXIT_OK
 
 
