@@ -148,6 +148,8 @@ def _is_plain_file_name(name: object) -> bool:
     return (
         isinstance(name, str)
         and name not in {"", ".", ".."}
+        and name == name.strip()
+        and not name.endswith(".")
         and "/" not in name
         and "\\" not in name
         and ":" not in name
