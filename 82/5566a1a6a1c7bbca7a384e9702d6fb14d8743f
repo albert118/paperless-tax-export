@@ -1,0 +1,49 @@
+tests/test_verify.py
+  s_b0836905a23abc::t_bb60bc0abdc0c0 419-422
+  s_b0836905a23abc::t_59060e6454153e 416-418
+  s_b0836905a23abc::t_81052b4855629c 423-425
+  s_da2bfc32af2517::t_eb2bb7f08aa779 98-117,408-409,411-415,426-446
+tests/test_manifest.py
+  s_b0836905a23abc::t_389240c79af0ef 349
+  s_b0836905a23abc::t_423c20b4d1c572 346-348
+  s_b0836905a23abc::t_1ccd0aaaf770ad 350-352
+  s_da2bfc32af2517::t_7d1638b2f07acd 335-345,353-354
+AGENTS.md
+  s_b0836905a23abc::t_9a29db1695f9e6 84-87
+README.md
+  s_b0836905a23abc::t_327835f3baeb1f 106-111,222-223
+src/paperless_tax_export/cli.py
+  s_da2bfc32af2517::t_760f4233c9fef3 266
+src/paperless_tax_export/settings.py
+  s_da2bfc32af2517::t_6c68f7db28d81b 68-72
+tests/test_cli.py
+  s_b0836905a23abc::t_055960c48ecff1 346-348,350,359-438
+tests/test_export.py
+  s_b0836905a23abc::t_299894831cf145 5-6,212-281
+tests/test_settings.py
+  s_da2bfc32af2517::t_4e1d0c3f376c34 137-151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "825566a1a6a1c7bbca7a384e9702d6fb14d8743f",
+  "prompts": {},
+  "sessions": {
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_da2bfc32af2517": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a0b7c959bc2465620",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
