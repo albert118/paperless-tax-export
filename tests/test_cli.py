@@ -13,6 +13,7 @@ from conftest import (
     custom_field_payload,
     document_payload,
     document_type_payload,
+    filtered_documents_response,
     json_response,
     page_payload,
     storage_path_payload,
@@ -67,8 +68,8 @@ def _audit_handler() -> Callable[[httpx.Request], httpx.Response]:
                 )
             )
         if path == "/api/documents/":
-            return json_response(
-                page_payload([document_payload(7, title="Receipt", created="2025-10-01T00:00:00Z")])
+            return filtered_documents_response(
+                request, [document_payload(7, title="Receipt", created="2025-10-01T00:00:00Z")]
             )
         if path == "/api/custom_fields/":
             return json_response(
@@ -109,12 +110,7 @@ def _run_handler() -> Callable[[httpx.Request], httpx.Response]:
         if path == "/api/document_types/":
             return json_response(page_payload([document_type_payload(6, "Receipt")]))
         if path == "/api/documents/":
-            params = request.url.params
-            if params.get("page_size") == "1" and params.get("fields") == "id":
-                return json_response(
-                    {"count": 1, "next": None, "previous": None, "results": [{"id": 1}]}
-                )
-            return json_response(page_payload([document]))
+            return filtered_documents_response(request, [document])
         return json_response({}, status_code=404)
 
     return handler
@@ -365,3 +361,130 @@ def test_run_missing_deduction_tag_returns_4(
     assert captured.out == ""
     assert "tax deductible" in captured.err
     assert not (tmp_path / "out").exists()
+
+
+def _run_handler_with_documents(
+    documents_handler: Callable[[httpx.Request], httpx.Response],
+) -> Callable[[httpx.Request], httpx.Response]:
+    """The run handler, with ``/api/documents/`` served by *documents_handler*."""
+    base = _run_handler()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/documents/":
+            return documents_handler(request)
+        return base(request)
+
+    return handler
+
+
+def _without_params(request: httpx.Request, *, prefix: str) -> httpx.Request:
+    kept = [(key, value) for key, value in request.url.params.items() if not key.startswith(prefix)]
+    return httpx.Request(request.method, request.url.copy_with(params=kept))
+
+
+@pytest.mark.parametrize(
+    ("ignored_prefix", "documents", "expected"),
+    [
+        (
+            "tags__id__all",
+            [
+                document_payload(1, tags=[1], custom_fields=[{"field": 10, "value": "1.00"}]),
+                document_payload(2, tags=[9], custom_fields=[{"field": 10, "value": "2.00"}]),
+            ],
+            "1 do not carry the tag",
+        ),
+        (
+            "created__",
+            [
+                document_payload(1, created="2025-10-01T00:00:00Z"),
+                document_payload(2, created="2026-07-01T00:00:00Z"),
+            ],
+            "1 were created outside",
+        ),
+    ],
+    ids=["tag-filter", "created-window"],
+)
+def test_run_returns_4_and_writes_nothing_when_the_server_ignores_a_filter(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    ignored_prefix: str,
+    documents: list[dict[str, object]],
+    expected: str,
+) -> None:
+    token_file = _write_token(tmp_path)
+
+    def documents_handler(request: httpx.Request) -> httpx.Response:
+        return filtered_documents_response(
+            _without_params(request, prefix=ignored_prefix), documents
+        )
+
+    _install_mock_client(monkeypatch, _run_handler_with_documents(documents_handler))
+    output = tmp_path / "out"
+    code = main(["run", "--token-file", str(token_file), "--output", str(output)])
+    captured = capsys.readouterr()
+    assert code == 4
+    assert captured.out == ""
+    assert expected in captured.err
+    assert "ignored a filter" in captured.err
+    assert not output.exists()
+
+
+def test_run_returns_4_and_writes_nothing_when_the_tagged_count_is_below_the_selected(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    token_file = _write_token(tmp_path)
+    documents = [document_payload(1), document_payload(2)]
+
+    def documents_handler(request: httpx.Request) -> httpx.Response:
+        params = request.url.params
+        if params.get("page_size") == "1" and params.get("fields") == "id":
+            return json_response(page_payload([{"id": 1}], count=1))
+        return filtered_documents_response(request, documents)
+
+    _install_mock_client(monkeypatch, _run_handler_with_documents(documents_handler))
+    output = tmp_path / "out"
+    code = main(["run", "--token-file", str(token_file), "--output", str(output)])
+    captured = capsys.readouterr()
+    assert code == 4
+    assert captured.out == ""
+    assert "1 documents carry tag id 1" in captured.err
+    assert "2 selected" in captured.err
+    assert not output.exists()
+
+
+def test_run_accepts_documents_on_both_fy_boundary_dates(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    token_file = _write_token(tmp_path)
+    documents = [
+        document_payload(
+            doc_id,
+            created=f"{created}T00:00:00Z",
+            correspondent=5,
+            custom_fields=[{"field": 10, "value": "1.00"}],
+        )
+        for doc_id, created in (
+            (1, "2025-06-30"),
+            (2, "2025-07-01"),
+            (3, "2026-06-30"),
+            (4, "2026-07-01"),
+        )
+    ]
+
+    _install_mock_client(
+        monkeypatch,
+        _run_handler_with_documents(
+            lambda request: filtered_documents_response(request, documents)
+        ),
+    )
+    output = tmp_path / "out"
+    code = main(["run", "--token-file", str(token_file), "--output", str(output)])
+    assert code == 0
+    deductions = (output / "deductions.csv").read_text(encoding="utf-8-sig")
+    assert [line.split(",")[0] for line in deductions.splitlines()[1:]] == ["2", "3"]
+    assert "2,2025-07-01" in deductions
+    assert "3,2026-06-30" in deductions

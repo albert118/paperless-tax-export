@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from paperless_tax_export.client import PaperlessClient
-from paperless_tax_export.errors import StartupError
+from paperless_tax_export.errors import CountGuardError, StartupError
 from paperless_tax_export.models import CustomFieldDef, Document, Tag
 
 
@@ -81,12 +81,38 @@ def select_documents(
         created_from=fy_start,
         created_to=fy_end,
     )
+    _check_filters_were_honoured(documents, tag_id=tag_id, fy_start=fy_start, fy_end=fy_end)
     total_tagged = client.count_documents(tag_id=tag_id)
+    out_of_fy_count = total_tagged - len(documents)
+    if out_of_fy_count < 0:
+        raise CountGuardError(
+            f"{total_tagged} documents carry tag id {tag_id}, fewer than the "
+            f"{len(documents)} selected in the financial year; Paperless changed "
+            "during the run; re-run"
+        )
     return SelectionResult(
         total_tagged=total_tagged,
         documents=tuple(documents),
-        out_of_fy_count=total_tagged - len(documents),
+        out_of_fy_count=out_of_fy_count,
     )
+
+
+def _check_filters_were_honoured(
+    documents: Sequence[Document], *, tag_id: int, fy_start: str, fy_end: str
+) -> None:
+    """Raise ``StartupError`` when a returned document breaks the tag or date filter.
+
+    Paperless ignores query parameters it does not recognise, so a filter that
+    stopped working would return unrelated documents. Only counts are reported.
+    """
+    untagged = sum(1 for document in documents if tag_id not in document.tags)
+    outside = sum(1 for document in documents if not fy_start <= document.created[:10] <= fy_end)
+    if untagged or outside:
+        raise StartupError(
+            f"of {len(documents)} documents listed for tag id {tag_id}, {untagged} do not carry "
+            f"the tag and {outside} were created outside {fy_start} to {fy_end}; "
+            "the server may have ignored a filter"
+        )
 
 
 def select_ibkr_documents(
