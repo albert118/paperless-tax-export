@@ -118,6 +118,95 @@ def test_run_twice_is_byte_identical(tmp_path: Path) -> None:
     assert read_bytes(first / "review.csv") == read_bytes(second / "review.csv")
 
 
+REVIEWED_TAG = tag_payload(2, "asset-reviewed")
+
+
+def _asset_warnings(warnings: tuple[str, ...]) -> tuple[str, ...]:
+    """The reviewed-tag warnings only; other warnings (investments) are not under test here."""
+    return tuple(warning for warning in warnings if "asset-reviewed" in warning)
+
+
+def _over_300_documents() -> list[dict[str, object]]:
+    return [
+        document_payload(
+            1,
+            title="Laptop",
+            tags=[1, 2],
+            correspondent=5,
+            custom_fields=[{"field": 10, "value": "350.00"}],
+        ),
+        document_payload(
+            2,
+            title="Monitor",
+            tags=[1],
+            correspondent=5,
+            custom_fields=[{"field": 10, "value": "351.00"}],
+        ),
+    ]
+
+
+def test_reviewed_tag_moves_only_the_tagged_over_300_document_to_deductions(
+    tmp_path: Path,
+) -> None:
+    handler = make_handler(
+        tags=[tag_payload(1, "tax deductible", document_count=2), REVIEWED_TAG],
+        documents=_over_300_documents(),
+    )
+    result = run_export(Settings(), make_client(handler), output=tmp_path / "out")
+    assert (result.accepted_count, result.review_count) == (1, 1)
+    deductions = read_bytes(tmp_path / "out" / "deductions.csv").decode("utf-8-sig")
+    review = read_bytes(tmp_path / "out" / "review.csv").decode("utf-8-sig")
+    assert "1,2025-10-01,Alpha Supplies,Laptop,350.00,AUD" in deductions
+    assert "over-300 reviewed (tag asset-reviewed)" in deductions
+    assert "2,AMOUNT_OVER_300," in review
+    assert _asset_warnings(result.warnings) == ()
+
+
+def test_missing_reviewed_tag_warns_once_when_an_over_300_row_stays_in_review(
+    tmp_path: Path,
+) -> None:
+    handler = make_handler(documents=_over_300_documents())
+    result = run_export(Settings(), make_client(handler), output=tmp_path / "out")
+    assert result.review_count == 2
+    assert _asset_warnings(result.warnings) == (
+        "asset-reviewed tag 'asset-reviewed' not found in Paperless; "
+        "AMOUNT_OVER_300 rows cannot be cleared until it exists",
+    )
+
+
+def test_missing_reviewed_tag_is_silent_without_over_300_rows(tmp_path: Path) -> None:
+    handler = make_handler(documents=_happy_documents())
+    result = run_export(Settings(), make_client(handler), output=tmp_path / "out")
+    assert _asset_warnings(result.warnings) == ()
+
+
+def test_a_custom_reviewed_tag_name_is_used_and_recorded_in_the_manifest(tmp_path: Path) -> None:
+    handler = make_handler(
+        tags=[tag_payload(1, "tax deductible", document_count=2), tag_payload(2, "assets ok")],
+        documents=_over_300_documents(),
+    )
+    settings = Settings(asset_reviewed_tag="assets ok")
+    result = run_export(settings, make_client(handler), output=tmp_path / "out")
+    assert (result.accepted_count, result.review_count) == (1, 1)
+    manifest = (tmp_path / "out" / "manifest.json").read_text(encoding="utf-8")
+    assert '"asset_reviewed_tag": "assets ok"' in manifest
+
+
+def test_disabling_the_reviewed_tag_keeps_over_300_rows_in_review_without_a_warning(
+    tmp_path: Path,
+) -> None:
+    handler = make_handler(
+        tags=[tag_payload(1, "tax deductible", document_count=2), REVIEWED_TAG],
+        documents=_over_300_documents(),
+    )
+    settings = Settings(asset_reviewed_tag=None)
+    result = run_export(settings, make_client(handler), output=tmp_path / "out")
+    assert result.review_count == 2
+    assert _asset_warnings(result.warnings) == ()
+    manifest = (tmp_path / "out" / "manifest.json").read_text(encoding="utf-8")
+    assert '"asset_reviewed_tag": null' in manifest
+
+
 def test_missing_required_field_raises_startup_error(tmp_path: Path) -> None:
     handler = make_handler(fields=[WORK_USE_FIELD, DATE_FIELD], documents=_happy_documents())
     with pytest.raises(StartupError) as exc_info:

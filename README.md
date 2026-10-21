@@ -60,6 +60,28 @@ currency symbols or thousands separators, rows sorted by date then document ID, 
 cells guarded against formula injection. The Paperless document ID is on every row as
 the traceability key; no CSV contains URLs.
 
+### Clearing `AMOUNT_OVER_300`
+
+`AMOUNT_OVER_300` flags an AUD amount above 300 so you decide whether the purchase needs
+asset treatment (depreciation) instead of an immediate deduction. The amount never
+changes, so the flag cannot clear itself: you clear it in Paperless.
+
+- To claim the item in full, tag the document with `asset-reviewed` (the default name; set
+  another with `run --asset-reviewed-tag NAME`) and re-run. The row loses the code, goes
+  to `deductions.csv`, and `notes_for_agent` says `over-300 reviewed (tag asset-reviewed)`.
+- To depreciate it, or if you are unsure, leave the tag off. The row stays in `review.csv`
+  for you and the accountant to settle.
+- The tag clears only this code. A zero or negative amount, a duplicate suspect, an income
+  tag and every other code still send the row to review. It has no effect on a foreign
+  amount (the check applies to AUD only) or on an amount of 300 or less.
+- If the tag does not exist in Paperless and a row is still flagged, `run` warns once:
+  `asset-reviewed tag 'asset-reviewed' not found in Paperless; AMOUNT_OVER_300 rows cannot
+  be cleared until it exists`. `run` never creates the tag.
+- The tag name is recorded in `manifest.json` as `parameters.asset_reviewed_tag`.
+
+The tag records that you reviewed the item, not why. A total built from `deductions.csv`
+counts a tagged item at its full amount.
+
 ## How it reads Paperless
 
 - Read-only. The API token belongs to a view-only user, and the client makes GET

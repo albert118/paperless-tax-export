@@ -14,6 +14,7 @@ from paperless_tax_export.classify import (
     ClassifyContext,
     classify_documents,
 )
+from paperless_tax_export.errors import SettingsError
 from paperless_tax_export.models import CustomFieldDef, Document
 from paperless_tax_export.parsing import ReviewCode
 from paperless_tax_export.settings import Settings
@@ -67,6 +68,7 @@ def make_context(
     document_types: Mapping[int, str] | None = None,
     tags: Mapping[int, str] | None = None,
     income_tag_ids: frozenset[int] = frozenset(),
+    asset_reviewed_tag_ids: frozenset[int] = frozenset(),
 ) -> ClassifyContext:
     """Build a context, resolving the settings' field names against *field_defs*.
 
@@ -90,6 +92,7 @@ def make_context(
         document_types=dict(document_types or {}),
         tags=dict(tags or {}),
         income_tag_ids=income_tag_ids,
+        asset_reviewed_tag_ids=asset_reviewed_tag_ids,
     )
 
 
@@ -859,3 +862,91 @@ def test_unknown_tag_ids_fall_back_to_hashtag_in_row() -> None:
         context,
     )
     assert row.tags == ("#77",)
+
+
+REVIEWED_TAG = 91
+
+
+def _reviewed_context(income_tag_ids: frozenset[int] = frozenset()) -> ClassifyContext:
+    return make_context(
+        correspondents={CORRESPONDENT_ID: SUPPLIER_NAME},
+        income_tag_ids=income_tag_ids,
+        asset_reviewed_tag_ids=frozenset({REVIEWED_TAG}),
+    )
+
+
+def _over_300_doc(
+    doc_id: int, amount: str = "350.00", *, tags: list[int] | None = None
+) -> Document:
+    return healthy_doc(
+        doc_id,
+        tags=tags,
+        custom_fields=[
+            {"field": F_AMOUNT.id, "value": amount},
+            {"field": F_DATE.id, "value": "2025-11-05"},
+        ],
+    )
+
+
+def test_reviewed_tag_clears_amount_over_300_and_notes_it() -> None:
+    classification, row = classify_one(_over_300_doc(1, tags=[REVIEWED_TAG]), _reviewed_context())
+    assert row.reason_codes == ()
+    assert row in classification.accepted
+    assert row.notes_for_agent == "over-300 reviewed (tag asset-reviewed)"
+
+
+def test_amount_over_300_without_the_reviewed_tag_still_goes_to_review() -> None:
+    classification, row = classify_one(_over_300_doc(1), _reviewed_context())
+    assert row.reason_codes == (ReviewCode.AMOUNT_OVER_300,)
+    assert row in classification.review
+    assert "reviewed" not in row.notes_for_agent
+
+
+def test_reviewed_tag_on_an_amount_not_over_300_adds_no_note() -> None:
+    _, row = classify_one(_over_300_doc(1, "250.00", tags=[REVIEWED_TAG]), _reviewed_context())
+    assert row.reason_codes == ()
+    assert row.notes_for_agent == ""
+
+
+def test_reviewed_tag_does_not_apply_to_foreign_amounts() -> None:
+    _, row = classify_one(_over_300_doc(1, "USD500.00", tags=[REVIEWED_TAG]), _reviewed_context())
+    assert row.reason_codes == ()
+    assert "over-300 reviewed" not in row.notes_for_agent
+    assert "over-300 check not applied to USD" in row.notes_for_agent
+
+
+def test_reviewed_tag_clears_only_amount_over_300() -> None:
+    income = 55
+    context = _reviewed_context(frozenset({income}))
+    _, row = classify_one(_over_300_doc(1, tags=[REVIEWED_TAG, income]), context)
+    assert row.reason_codes == (ReviewCode.INCOME_TAGGED,)
+    assert row.notes_for_agent == "over-300 reviewed (tag asset-reviewed)"
+
+
+def test_reviewed_tag_does_not_clear_a_duplicate_suspect() -> None:
+    documents = [_over_300_doc(1, tags=[REVIEWED_TAG]), _over_300_doc(2, tags=[REVIEWED_TAG])]
+    classification = classify_documents(documents, _reviewed_context())
+    assert classification.accepted == ()
+    assert [row.reason_codes for row in classification.review] == [
+        (ReviewCode.DUPLICATE_SUSPECT,),
+        (ReviewCode.DUPLICATE_SUSPECT,),
+    ]
+
+
+def test_disabled_reviewed_tag_never_clears_amount_over_300() -> None:
+    settings = Settings(
+        field_amount="Transaction Amount",
+        field_date="Transaction Date",
+        field_supplier=None,
+        asset_reviewed_tag=None,
+        fy_start=FY_START,
+        fy_end=FY_END,
+    )
+    context = make_context(settings, correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
+    _, row = classify_one(_over_300_doc(1, tags=[REVIEWED_TAG]), context)
+    assert row.reason_codes == (ReviewCode.AMOUNT_OVER_300,)
+
+
+def test_an_empty_reviewed_tag_name_is_a_settings_error() -> None:
+    with pytest.raises(SettingsError, match="asset_reviewed_tag"):
+        Settings(asset_reviewed_tag="  ")

@@ -66,6 +66,7 @@ def render_manifest(
             "fy_end": settings.fy_end,
             "ibkr_correspondent": settings.ibkr_correspondent,
             "income_tags": list(settings.income_tags),
+            "asset_reviewed_tag": settings.asset_reviewed_tag,
             "default_currency": settings.default_currency,
             "field_amount": settings.field_amount,
             "field_gst": settings.field_gst,
