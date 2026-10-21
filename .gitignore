@@ -124,10 +124,26 @@ pyvenv.cfg
 secrets/
 *.token
 paperless-token*.txt
+token.txt
+secrets.json
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local compose overrides can carry the token path, hosts and bind mounts.
+compose.override.*
+docker-compose.override.*
 
 # Generated output (CSVs and manifest). Reproducible from Paperless, never
 # committed.
 output/
+
+# Stray exports and receipt files dropped in the repository root. Anchored to
+# the root so sanitised fixtures under tests/ stay trackable.
+/*.csv
+/*.pdf
+/*.zip
 
 # Recorded data that has not been sanitised. Real receipts and IBKR statements
 # stay out of git; sanitised fixtures live in tests/fixtures/.
