@@ -1,0 +1,57 @@
+tests/test_download.py
+  s_b0836905a23abc::t_f7b81ff1482679 1-51,53-214,216-460,463-476,481-675,677-777
+  s_b0836905a23abc::t_9cfc63320787bf 477-480
+  s_b0836905a23abc::t_a631d9c3b491b7 52
+  s_b0836905a23abc::t_0693c15a3cf066 215
+  s_b0836905a23abc::t_1ef2633efba5a0 461-462
+  s_b0836905a23abc::t_eca9b673456bd3 676
+  s_b0836905a23abc::t_4a313bb64ed3ad 778-780
+src/paperless_tax_export/cli.py
+  s_b0836905a23abc::t_c752749e89995e 254
+  s_b0836905a23abc::t_c004e131e66c1c 251-253
+  s_b0836905a23abc::t_47ac4ae1ea6a6c 255-257
+  s_7826c09076e861::t_f01ef680341bb2 20-27,238-250,258-285,304-305,409-448
+src/paperless_tax_export/client.py
+  s_b0836905a23abc::t_d695c3e33aeb1b 60-61
+  s_b0836905a23abc::t_fbb7d6f237adef 63
+  s_b0836905a23abc::t_1b59d0db23a599 57-59
+  s_b0836905a23abc::t_d0f6b092c8a677 62
+  s_b0836905a23abc::t_7b905f9e32b5d9 64-66
+  s_7826c09076e861::t_3f0b5c23b8969c 13-16,19,27,54-56,67-120,231-295,486-506
+src/paperless_tax_export/download.py
+  s_b0836905a23abc::t_e57deae0f8d099 1-440
+tests/conftest.py
+  s_7826c09076e861::t_dd18d32a5b3229 10,153-185
+AGENTS.md
+  s_b0836905a23abc::t_3d9b433d1d61ac 36-39,45
+README.md
+  s_b0836905a23abc::t_9a35e93bddcd18 12,165-218,231
+examples/README.md
+  s_b0836905a23abc::t_1a72a3a43df6f0 41,46-47,58
+src/paperless_tax_export/errors.py
+  s_b0836905a23abc::t_670d16250608cc 80-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cab0047d865f09f262f32b865702818aa5503af7",
+  "prompts": {},
+  "sessions": {
+    "s_7826c09076e861": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a77e8da2461a3db20",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
