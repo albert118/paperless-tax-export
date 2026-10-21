@@ -47,9 +47,14 @@ release. Do not disable or weaken those checks to get a change through.
 
 - **Read-only toward Paperless.** GET requests only. No write client, no PATCH, no
   tag creation, no write-back.
-- **No secrets in git.** The API token comes from `secrets/` locally and from a mounted
-  secret file in the container. Never commit a token, a real `.env`, or a URL that
-  carries a token.
+- **No secrets in git.** The API token comes from, in order, `--token-file`, the
+  `PAPERLESS_TOKEN` environment variable, a `PAPERLESS_TOKEN` entry in the dotenv file named
+  by `--env-file` (or `PAPERLESS_ENV_FILE`), then `secrets/paperless-token.txt`. In the
+  container, compose injects a chmod 600 dotenv file kept outside the stack and outside the
+  repo. There is no `--token` flag, and a `.env` in the working directory is never
+  auto-loaded. The dotenv file is parsed only and never written into `os.environ`. Never
+  commit a token, a real `.env`, or a URL that carries a token, and never print the token or
+  any part of it (errors name the source, not the value).
 - **No receipt data in git.** `output/` and `tests/fixtures/raw/` are ignored. Fixtures
   are sanitised before they are committed: no real supplier names, amounts, account
   numbers or IBKR statement content.

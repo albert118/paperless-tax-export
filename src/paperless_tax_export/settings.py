@@ -3,8 +3,8 @@
 The settings live in a frozen, slotted dataclass and are validated eagerly in
 ``__post_init__`` so a bad configuration fails before any network traffic.
 Command-line flags populate a subset of these values (the name and date
-identifiers stay here, since they are corrected in one place); nothing is read
-from the environment.
+identifiers stay here, since they are corrected in one place). The environment
+and dotenv lookup for the token and base URL lives in ``env_config``.
 """
 
 from __future__ import annotations
