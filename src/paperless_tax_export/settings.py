@@ -38,6 +38,7 @@ class Settings:
     page_size: int = 100
     default_currency: str = "AUD"
     income_tags: tuple[str, ...] = ("income", "dividend")
+    asset_reviewed_tag: str | None = "asset-reviewed"
     expected_count: int | None = None
     timeout_seconds: float = 30.0
 
@@ -62,6 +63,8 @@ class Settings:
             raise SettingsError(
                 f"default_currency must be three uppercase letters, got {self.default_currency!r}"
             )
+        if self.asset_reviewed_tag is not None and not self.asset_reviewed_tag.strip():
+            raise SettingsError("asset_reviewed_tag must not be empty; use None to disable it")
         if self.expected_count is not None and self.expected_count < 0:
             raise SettingsError(f"expected_count must not be negative, got {self.expected_count}")
         if self.timeout_seconds <= 0:

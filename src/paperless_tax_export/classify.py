@@ -60,6 +60,7 @@ class ClassifyContext:
     document_types: Mapping[int, str]
     tags: Mapping[int, str]
     income_tag_ids: frozenset[int]
+    asset_reviewed_tag_ids: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +188,7 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
 
     amount: Decimal | None = None
     currency: str | None = None
+    over_300_reviewed = False
     amount_field = context.amount_field
     if amount_field is None:
         codes.add(ReviewCode.MISSING_AMOUNT)
@@ -210,8 +212,13 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
                 codes.add(ReviewCode.ZERO_AMOUNT)
             # Greater than $300, positive only, AUD only: a negative or zero
             # amount never gets AMOUNT_OVER_300.
+            # The reviewed tag is the owner's recorded decision: it clears this
+            # code and nothing else.
             if currency == AUD and parsed_amount.amount > 300:
-                codes.add(ReviewCode.AMOUNT_OVER_300)
+                if context.asset_reviewed_tag_ids.intersection(document.tags):
+                    over_300_reviewed = True
+                else:
+                    codes.add(ReviewCode.AMOUNT_OVER_300)
 
     document_type = (
         context.document_types.get(document.document_type, "")
@@ -230,6 +237,8 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
     if amount is not None and currency is not None and currency != AUD:
         notes.append(f"foreign currency {currency}; amount not converted to {AUD}")
         notes.append(f"over-300 check not applied to {currency}")
+    if over_300_reviewed:
+        notes.append(f"over-300 reviewed (tag {settings.asset_reviewed_tag})")
 
     raw_amount = _raw_cell_value(document, amount_field)
     raw_date = _raw_cell_value(document, date_field)

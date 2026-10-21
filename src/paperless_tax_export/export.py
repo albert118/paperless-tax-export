@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from paperless_tax_export.classify import ClassifyContext, classify_documents
+from paperless_tax_export.classify import Classification, ClassifyContext, classify_documents
 from paperless_tax_export.client import PaperlessClient
 from paperless_tax_export.csv_output import (
     DEDUCTIONS_COLUMNS,
@@ -34,6 +34,7 @@ from paperless_tax_export.manifest import (
     render_manifest,
 )
 from paperless_tax_export.models import Document
+from paperless_tax_export.parsing import ReviewCode
 from paperless_tax_export.selection import (
     resolve_fields,
     resolve_tag,
@@ -110,6 +111,11 @@ def run_export(
         document_types={type_def.id: type_def.name for type_def in document_types},
         tags={tag.id: tag.name for tag in all_tags},
         income_tag_ids=frozenset(tag.id for tag in all_tags if tag.name in income_names),
+        asset_reviewed_tag_ids=frozenset(
+            tag.id
+            for tag in all_tags
+            if settings.asset_reviewed_tag is not None and tag.name == settings.asset_reviewed_tag
+        ),
     )
 
     selection = select_documents(
@@ -138,8 +144,11 @@ def run_export(
     investments_found, investment_documents = select_ibkr_documents(
         client, settings.ibkr_correspondent, settings.fy_start, settings.fy_end
     )
-    warnings = _investments_warnings(
-        settings.ibkr_correspondent, investments_found, documents, investment_documents
+    warnings = (
+        *_investments_warnings(
+            settings.ibkr_correspondent, investments_found, documents, investment_documents
+        ),
+        *_asset_reviewed_tag_warnings(settings, context, classification),
     )
     investment_rows = tuple(_investment_row(document, context) for document in investment_documents)
 
@@ -234,6 +243,21 @@ def _investments_warnings(
         f"document {document_id} carries the deduction tag and the "
         f"{correspondent_name!r} correspondent; it appears in both outputs"
         for document_id in both
+    )
+
+
+def _asset_reviewed_tag_warnings(
+    settings: Settings, context: ClassifyContext, classification: Classification
+) -> tuple[str, ...]:
+    """Warn once when AMOUNT_OVER_300 rows exist but the reviewed tag cannot clear them."""
+    tag_name = settings.asset_reviewed_tag
+    if tag_name is None or context.asset_reviewed_tag_ids:
+        return ()
+    if not any(ReviewCode.AMOUNT_OVER_300 in row.reason_codes for row in classification.review):
+        return ()
+    return (
+        f"asset-reviewed tag {tag_name!r} not found in Paperless; "
+        "AMOUNT_OVER_300 rows cannot be cleared until it exists",
     )
 
 

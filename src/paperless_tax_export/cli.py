@@ -172,6 +172,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"deduction tag to select (default: {settings.deduction_tag})",
     )
     run_parser.add_argument(
+        "--asset-reviewed-tag",
+        default=settings.asset_reviewed_tag,
+        help=(
+            "Paperless tag that marks an over-300 AUD document as reviewed and claimed in"
+            f" full, clearing AMOUNT_OVER_300 (default: {settings.asset_reviewed_tag})"
+        ),
+    )
+    run_parser.add_argument(
         "--fy-start",
         default=settings.fy_start,
         help=f"financial-year start, ISO date (default: {settings.fy_start})",
@@ -266,6 +274,7 @@ def _settings_from_run_args(args: argparse.Namespace, sources: EnvSources) -> Se
         base_url=resolve_base_url(args.base_url, Settings().base_url, sources),
         deduction_tag=args.tag,
         ibkr_correspondent=args.ibkr_correspondent,
+        asset_reviewed_tag=args.asset_reviewed_tag,
         fy_start=args.fy_start,
         fy_end=args.fy_end,
         expected_count=args.expected_count,
