@@ -1,0 +1,61 @@
+src/paperless_tax_export/estimate.py
+  s_b0836905a23abc::t_ddc540636d3c82 1-337
+  s_b0836905a23abc::t_d4326897538df5 338
+tests/test_estimate.py
+  s_b0836905a23abc::t_d5b724fc90c510 1-641
+  s_b0836905a23abc::t_48293191deda63 642-644
+  s_b0836905a23abc::t_1badc11ae7f190 645-646
+src/paperless_tax_export/csv_output.py
+  s_b0836905a23abc::t_78cc5396fcb03f 108
+  s_b0836905a23abc::t_079ef699fa8770 107
+  s_b0836905a23abc::t_41a9521f772094 109-111
+  s_f52efff3db3665::t_5c5622ad655c83 18,99,102,112-119,153,155-156
+AGENTS.md
+  s_b0836905a23abc::t_51477a1daa9026 19-21,32-34,38-45
+README.md
+  s_b0836905a23abc::t_99ccdc4b18f271 22,279-369
+examples/README.md
+  s_b0836905a23abc::t_2484d1a76af706 54
+src/paperless_tax_export/cli.py
+  s_b0836905a23abc::t_d0cc422e3c387b 24,28,142-143,215-224,293-294,354,367-376
+src/paperless_tax_export/env_config.py
+  s_b0836905a23abc::t_0a3c2effe2e769 16,22,27,91-110
+src/paperless_tax_export/export.py
+  s_b0836905a23abc::t_d0834ee406571a 15,28-34,37,75-77,101,160-162,168,185,200,217-219,286-295
+src/paperless_tax_export/manifest.py
+  s_b0836905a23abc::t_6ba10601e63289 23,59,78-81
+src/paperless_tax_export/settings.py
+  s_b0836905a23abc::t_eb383812a3823b 15,44-45,73-78
+src/paperless_tax_export/verify.py
+  s_b0836905a23abc::t_59e8719cd4dda3 29,37
+tests/conftest.py
+  s_b0836905a23abc::t_854a3e7f32e111 13,21-26
+tests/test_manifest.py
+  s_b0836905a23abc::t_929b9148d3f384 34-40,274,314
+tests/test_verify.py
+  s_b0836905a23abc::t_ac000ce098165e 27,94,155,341-362,519
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "467d7cd2f1c85b67ddc4ee4dcd911dd0728508c6",
+  "prompts": {},
+  "sessions": {
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_f52efff3db3665": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-accf4b6401be521cb",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
