@@ -31,6 +31,7 @@ src/paperless_tax_export/client.py
   s_5581b3dd4a496b::t_6e014713eaefab 122,128-129,131-134,144-145
 src/paperless_tax_export/estimate.py
   s_5581b3dd4a496b::t_d7b69e81e487a4 20,92-105,184,186-191,193,217,220,238,240-244,248,319-321,350-352,360
+  s_b0836905a23abc::t_fc9ce2cedd2551 245,250,266
 src/paperless_tax_export/export.py
   s_5581b3dd4a496b::t_e0236009ffb69f 18-23,42,57,62,87-88,171-174,176-180,188,205,217,242-243,320-334
 src/paperless_tax_export/selection.py
