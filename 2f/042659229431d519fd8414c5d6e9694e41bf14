@@ -1,0 +1,21 @@
+README.md
+  s_b0836905a23abc::t_75071451169af5 79-80,84-85,87-100
+  s_b0836905a23abc::t_e03cddf1d2a4dd 68-69
+  s_b0836905a23abc::t_343f960f27ac47 72-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2f042659229431d519fd8414c5d6e9694e41bf14",
+  "prompts": {},
+  "sessions": {
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
