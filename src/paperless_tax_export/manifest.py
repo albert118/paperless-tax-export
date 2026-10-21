@@ -19,7 +19,7 @@ from paperless_tax_export.settings import Settings
 
 DEDUCTIONS_FILE = "deductions.csv"
 REVIEW_FILE = "review.csv"
-IBKR_FILE = "ibkr-documents.csv"
+INVESTMENTS_FILE = "investments.csv"
 MANIFEST_FILE = "manifest.json"
 
 
@@ -45,7 +45,7 @@ class ManifestCounts:
     selected_in_fy: int
     accepted: int
     review: int
-    ibkr_count: int
+    investments_count: int
 
 
 def render_manifest(
@@ -79,7 +79,7 @@ def render_manifest(
             "selected_in_fy": counts.selected_in_fy,
             "accepted": counts.accepted,
             "review": counts.review,
-            "ibkr_count": counts.ibkr_count,
+            "investments_count": counts.investments_count,
         },
         "expected_count": settings.expected_count,
         "outputs": {file.name: {"sha256": file.sha256, "rows": file.rows} for file in files},

@@ -138,7 +138,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "Classify the deduction-tagged documents for one financial year,"
             " write deductions.csv (rows that pass every check) and review.csv"
             " (rows with reason codes a human still has to decide on), plus"
-            " ibkr-documents.csv (the IBKR correspondent's documents for the year)."
+            " investments.csv (the investing correspondent's documents for the year)."
         ),
     )
     run_parser.add_argument(
@@ -330,7 +330,7 @@ def _run_export_command(settings: Settings, token: str, args: argparse.Namespace
     )
     print(
         f"tagged {result.tagged_total}, out of FY {result.out_of_fy_count}, "
-        f"selected in FY {result.selected_count}, IBKR {result.ibkr_count}"
+        f"selected in FY {result.selected_count}, investments {result.investments_count}"
     )
     verb = "would write" if result.dry_run else "written to"
     for file in result.files:

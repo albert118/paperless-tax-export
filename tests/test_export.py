@@ -110,7 +110,10 @@ def test_run_export_writes_both_files_with_expected_counts(tmp_path: Path) -> No
     assert deductions.count("\r\n") == 2  # header + one accepted row
     assert "1,2025-10-01,Alpha Supplies" in deductions
     assert review.count("\r\n") == 2
-    assert "2,2025-10-01,Alpha Supplies" in review
+    assert (
+        "2,NEGATIVE_AMOUNT,2025-10-01,Alpha Supplies,Refund B,-5.00,AUD,,2025-10-01,"
+        "date from created"
+    ) in review
     assert "NEGATIVE_AMOUNT" in review
 
 
@@ -155,7 +158,7 @@ def test_guard_failure_writes_nothing(monkeypatch: pytest.MonkeyPatch, tmp_path:
 
 def test_notes_for_unconfigured_fields_are_deterministic() -> None:
     notes = unconfigured_field_notes(Settings())
-    assert any("GST field not configured" in note for note in notes)
+    assert not any("GST" in note or "work-use" in note for note in notes)
     assert any("supplier field not configured" in note for note in notes)
     assert not any("amount field not configured" in note for note in notes)
     assert unconfigured_field_notes(Settings()) == notes
@@ -172,7 +175,7 @@ def test_all_configured_fields_produce_no_notes() -> None:
     assert unconfigured_field_notes(settings) == ()
 
 
-def test_review_row_carries_reason_codes_and_raw_values(tmp_path: Path) -> None:
+def test_review_row_carries_reason_codes(tmp_path: Path) -> None:
     documents = [
         document_payload(
             2,
@@ -185,5 +188,5 @@ def test_review_row_carries_reason_codes_and_raw_values(tmp_path: Path) -> None:
     run_export(Settings(), client, output=tmp_path / "out")
     review = read_bytes(tmp_path / "out" / "review.csv").decode("utf-8-sig")
     assert "-5.00" in review  # amount_inc_gst, not guarded (decimal column)
+    assert "'-5.00" not in review  # raw_amount is no longer a column
     assert "NEGATIVE_AMOUNT" in review
-    assert "'-5.00" in review  # raw_amount text column is guarded

@@ -7,7 +7,7 @@ can work from, plus a review list of the documents a human still has to decide o
 
 Both `audit` and `run` talk to Paperless: `audit` reports how the live instance lines up
 with the settings, and `run` classifies the FY documents and writes `deductions.csv`,
-`review.csv` and `ibkr-documents.csv`.
+`review.csv` and `investments.csv`.
 `verify` talks to nothing: it re-checks a finished output directory against its manifest.
 
 To run it in Docker next to Paperless-ngx, see [examples/README.md](examples/README.md).
@@ -18,26 +18,39 @@ To run it in Docker next to Paperless-ngx, see [examples/README.md](examples/REA
 | --- | --- |
 | `review.csv` | Documents that need a human decision, with reason codes. The priority output. |
 | `deductions.csv` | Documents that pass every check. |
-| `ibkr-documents.csv` | Index of Interactive Brokers statements for the year (header only, plus a warning, when the correspondent is missing). A document that also carries the deduction tag appears here and in the deduction outputs, with a warning. |
+| `investments.csv` | Index of the investing portfolio statements for the year: the documents of the one configured correspondent (`--ibkr-correspondent`, default `Interactive Brokers`). Header only, plus a warning, when the correspondent is missing. A document that also carries the deduction tag appears here and in the deduction outputs, with a warning. |
 | `manifest.json` | Run parameters, tool and Paperless versions, counts, expected count, and SHA-256 and row count of each other output. No timestamp. |
 
 All files go into `output/`, which is never committed.
 
 `deductions.csv` has these columns, in order: `paperless_document_id`, `date`,
-`supplier_name`, `description`, `amount_inc_gst`, `gst_amount`, `document_type`,
-`work_use_pct`, `document_modified`, `notes_for_agent`. `review.csv` has the same columns
-followed by `title`, `correspondent`, `created`, `tags`, `reason_codes`, `raw_amount` and
-`raw_date`, so a review row can be promoted by editing it.
+`supplier_name`, `description`, `amount_inc_gst`, `currency`, `document_type`,
+`notes_for_agent`.
 
-`work_use_pct` is read from the `Claimable %` custom field and written as the stored number
-with two decimals. A blank `work_use_pct` means not apportioned: treat it as a full claim.
-Enter a value in Paperless only for the rare partly-private item. A blank value adds no
-note and no review code.
+`review.csv` has its own columns, in order: `paperless_document_id`, `reason_codes`,
+`date`, `correspondent`, `title`, `amount_inc_gst`, `currency`, `document_type`,
+`created`, `notes_for_agent`.
 
-The columns `category_label`, `claim_type`, `apportionment_basis`, `reimbursed`,
-`wfh_method`, `asset_cost_inc_gst` and `asset_set_id` are deferred to a later revision.
-Files from earlier versions have these seven extra blank columns, so column positions
-differ from the current output.
+`currency` is the three-letter ISO code of the parsed amount: a prefix on the stored value,
+else the amount field's default currency, else `AUD`. It is blank when the amount is
+missing or unparseable. `amount_inc_gst` is a plain number with two decimals for every
+currency (there is no minor-unit table, so JPY is also written with two decimals).
+
+A foreign-currency amount is accepted into `deductions.csv` as it is: it is never converted
+and has no review code. `notes_for_agent` says `foreign currency <CODE>; amount not
+converted to AUD` and `over-300 check not applied to <CODE>`. The `AMOUNT_OVER_300` review
+code applies to AUD amounts only; `NEGATIVE_AMOUNT` applies to every currency. Earlier
+versions sent foreign-currency amounts to `review.csv` under a `FOREIGN_CURRENCY` code,
+which no longer exists.
+
+`investments.csv` has these columns, in order: `paperless_document_id`, `title`,
+`created`, `document_type`, `correspondent`.
+
+Earlier versions wrote `ibkr-documents.csv` and more columns: `gst_amount`,
+`work_use_pct` and `document_modified` in both deduction files, and `tags`, `raw_amount`
+and `raw_date` in `review.csv`, so column positions differ from the current output.
+`category_label`, `claim_type`, `apportionment_basis`, `reimbursed`, `wfh_method`,
+`asset_cost_inc_gst` and `asset_set_id` are deferred to a later revision.
 
 CSV format: UTF-8 with BOM, `\r\n` line endings, ISO dates, two-decimal amounts without
 currency symbols or thousands separators, rows sorted by date then document ID, and text
@@ -128,8 +141,8 @@ defaults to the directory `run` writes into.
   number of data rows (header excluded, counted with a CSV parser, so a quoted title with a
   line break is one row) and compares both with the manifest.
 - It also checks the manifest against the files: `counts.accepted` equals the rows of
-  `deductions.csv`, `counts.review` the rows of `review.csv`, `counts.ibkr_count` the rows
-  of `ibkr-documents.csv`, and `accepted + review` equals `selected_in_fy`.
+  `deductions.csv`, `counts.review` the rows of `review.csv`, `counts.investments_count` the rows
+  of `investments.csv`, and `accepted + review` equals `selected_in_fy`.
 - It prints one `OK` or `MISMATCH` line per file, one line per failed check and a summary.
   Files in the directory that the manifest does not list (`audit.json`, `manifest.json`)
   produce one `note:` line, never a failure. It never prints file contents. A listed file
@@ -144,6 +157,9 @@ a corrupted or truncated copy. What it does not prove: that the files match Pape
 that nobody changed them on purpose. It is not tamper-proof, because whoever can edit a CSV
 can regenerate the manifest too. After you hand-edit `review.csv`, `verify` fails on that
 file, as it should, so run it straight after a run or against a copy.
+
+A manifest written by 0.2.x lists `ibkr-documents.csv` and `counts.ibkr_count`, so `verify`
+rejects it with exit 2. Re-run `run` to produce a current manifest.
 
 ## The Paperless token
 

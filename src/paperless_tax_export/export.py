@@ -1,7 +1,7 @@
 """High-level export run: resolve, select, classify, then write the CSVs.
 
 ``run_export`` is the run layer behind the ``run`` subcommand. Every check
-(startup resolution, the count guard and the IBKR selection) completes before
+(startup resolution, the count guard and the investments selection) completes before
 anything touches disk: the output directory is only created once the
 classifications are proven complete, so a failing run leaves no partial files
 behind. ``manifest.json`` is rendered from the bytes of the other outputs and
@@ -19,14 +19,14 @@ from paperless_tax_export.client import PaperlessClient
 from paperless_tax_export.csv_output import (
     DEDUCTIONS_COLUMNS,
     REVIEW_COLUMNS,
-    IbkrRow,
+    InvestmentRow,
     render_csv_bytes,
-    render_ibkr_csv_bytes,
+    render_investments_csv_bytes,
 )
 from paperless_tax_export.errors import CountGuardError
 from paperless_tax_export.manifest import (
     DEDUCTIONS_FILE,
-    IBKR_FILE,
+    INVESTMENTS_FILE,
     MANIFEST_FILE,
     REVIEW_FILE,
     ManifestCounts,
@@ -55,7 +55,7 @@ class ExportResult:
     selected_count: int
     accepted_count: int
     review_count: int
-    ibkr_count: int
+    investments_count: int
     output_dir: Path
     tagged_total: int = 0
     out_of_fy_count: int = 0
@@ -88,22 +88,9 @@ def run_export(
     deduction_tag = resolve_tag(client, settings.deduction_tag)
 
     required = [settings.field_amount] if settings.field_amount is not None else []
-    optional = [
-        name
-        for name in (
-            settings.field_gst,
-            settings.field_work_use,
-            settings.field_date,
-            settings.field_supplier,
-        )
-        if name is not None
-    ]
+    optional = [name for name in (settings.field_date, settings.field_supplier) if name is not None]
     resolved = resolve_fields(client, required=required, optional=optional)
     amount_field = resolved[settings.field_amount] if settings.field_amount is not None else None
-    gst_field = resolved[settings.field_gst] if settings.field_gst is not None else None
-    work_use_field = (
-        resolved[settings.field_work_use] if settings.field_work_use is not None else None
-    )
     date_field = resolved[settings.field_date] if settings.field_date is not None else None
     supplier_field = (
         resolved[settings.field_supplier] if settings.field_supplier is not None else None
@@ -117,8 +104,6 @@ def run_export(
     context = ClassifyContext(
         settings=settings,
         amount_field=amount_field,
-        gst_field=gst_field,
-        work_use_field=work_use_field,
         date_field=date_field,
         supplier_field=supplier_field,
         correspondents={correspondent.id: correspondent.name for correspondent in correspondents},
@@ -150,11 +135,13 @@ def run_export(
             f"{selected} selected documents"
         )
 
-    ibkr_found, ibkr_documents = select_ibkr_documents(
+    investments_found, investment_documents = select_ibkr_documents(
         client, settings.ibkr_correspondent, settings.fy_start, settings.fy_end
     )
-    warnings = _ibkr_warnings(settings.ibkr_correspondent, ibkr_found, documents, ibkr_documents)
-    ibkr_rows = tuple(_ibkr_row(document, context) for document in ibkr_documents)
+    warnings = _investments_warnings(
+        settings.ibkr_correspondent, investments_found, documents, investment_documents
+    )
+    investment_rows = tuple(_investment_row(document, context) for document in investment_documents)
 
     # Every check has passed: render every file in memory, manifest last.
     deductions_rows = tuple(classification.accepted)
@@ -166,7 +153,9 @@ def run_export(
             len(deductions_rows),
         ),
         PlannedFile(REVIEW_FILE, render_csv_bytes(review_rows, REVIEW_COLUMNS), len(review_rows)),
-        PlannedFile(IBKR_FILE, render_ibkr_csv_bytes(ibkr_rows), len(ibkr_rows)),
+        PlannedFile(
+            INVESTMENTS_FILE, render_investments_csv_bytes(investment_rows), len(investment_rows)
+        ),
     )
     manifest_bytes = render_manifest(
         settings,
@@ -176,7 +165,7 @@ def run_export(
             selected_in_fy=selected,
             accepted=len(deductions_rows),
             review=len(review_rows),
-            ibkr_count=len(ibkr_rows),
+            investments_count=len(investment_rows),
         ),
         files=csv_files,
         server_version=client.server_version,
@@ -190,7 +179,7 @@ def run_export(
         selected_count=selected,
         accepted_count=len(deductions_rows),
         review_count=len(review_rows),
-        ibkr_count=len(ibkr_rows),
+        investments_count=len(investment_rows),
         output_dir=output,
         tagged_total=selection.total_tagged,
         out_of_fy_count=selection.out_of_fy_count,
@@ -215,10 +204,10 @@ def _write_files(
     (output / manifest_file.name).write_bytes(manifest_file.content)
 
 
-def _ibkr_row(document: Document, context: ClassifyContext) -> IbkrRow:
+def _investment_row(document: Document, context: ClassifyContext) -> InvestmentRow:
     document_type = document.document_type
     correspondent = document.correspondent
-    return IbkrRow(
+    return InvestmentRow(
         document_id=document.id,
         title=document.title,
         created=document.created[:10],  # Paperless timestamps are ISO 8601
@@ -227,20 +216,20 @@ def _ibkr_row(document: Document, context: ClassifyContext) -> IbkrRow:
     )
 
 
-def _ibkr_warnings(
+def _investments_warnings(
     correspondent_name: str,
     found: bool,
     deduction_documents: Sequence[Document],
-    ibkr_documents: Sequence[Document],
+    investment_documents: Sequence[Document],
 ) -> tuple[str, ...]:
-    """Non-fatal findings about the IBKR index, one line each, in stable order."""
+    """Non-fatal findings about the investments index, one line each, in stable order."""
     if not found:
         return (
             f"correspondent {correspondent_name!r} not found in Paperless; "
-            "ibkr-documents.csv has no rows",
+            "investments.csv has no rows",
         )
     deduction_ids = {document.id for document in deduction_documents}
-    both = sorted(document.id for document in ibkr_documents if document.id in deduction_ids)
+    both = sorted(document.id for document in investment_documents if document.id in deduction_ids)
     return tuple(
         f"document {document_id} carries the deduction tag and the "
         f"{correspondent_name!r} correspondent; it appears in both outputs"
@@ -258,10 +247,6 @@ def unconfigured_field_notes(settings: Settings) -> tuple[str, ...]:
     notes: list[str] = []
     if settings.field_amount is None:
         notes.append("amount field not configured; every row gets MISSING_AMOUNT")
-    if settings.field_gst is None:
-        notes.append("GST field not configured; GST column left blank")
-    if settings.field_work_use is None:
-        notes.append("work-use field not configured; work-use column left blank")
     if settings.field_date is None:
         notes.append("date field not configured; row date falls back to the document created date")
     if settings.field_supplier is None:

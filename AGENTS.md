@@ -15,7 +15,7 @@ Outputs, written into `output/`:
 - `review.csv`: documents that need a human decision, with reason codes. This is the
   priority output.
 - `deductions.csv`: documents that pass every check.
-- `ibkr-documents.csv`: index of IBKR statements.
+- `investments.csv`: index of the investing portfolio statements (one configured correspondent).
 - `manifest.json`: parameters, versions, counts and file hashes.
 
 ## Current state
@@ -26,12 +26,13 @@ reports how it lines up with the export settings (`output/audit.json`). The audi
 diagnostic, not a gate: a missing tag, zero matching documents, missing fields and zero
 coverage are printed findings and the exit code stays 0. The `run` subcommand
 classifies the FY documents and writes `deductions.csv` and `review.csv`, plus
-`ibkr-documents.csv` (the IBKR correspondent's FY documents) and `manifest.json`
+`investments.csv` (the configured investing correspondent's FY documents) and `manifest.json`
 (no timestamp, written last). `run --expected-count N` compares N with the FY-scoped
 selected count and `run --dry-run` runs every guard and writes nothing.
 `verify [--output DIR]` re-checks a finished output directory offline: SHA-256 and data-row
 count of every file in `manifest.json`, plus the manifest's own counts (exit 0, 4 on a
-mismatch or missing listed file, 2 on an unusable manifest).
+mismatch or missing listed file, 2 on an unusable manifest, which includes a manifest
+written by 0.2.x: it lists `ibkr-documents.csv` and `counts.ibkr_count`).
 
 In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_export/`,
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,
@@ -76,9 +77,11 @@ release. Do not disable or weaken those checks to get a change through.
   from `created` and are not a signal.
 - The row `date` is the custom field date, falling back to `created`. A field date
   outside the FY is a review item, not an exclusion.
-- Amounts are GST-inclusive, from the live field `Transaction Amount`; GST from
-  `GST Amount`; work use from `Claimable %`. The live row-date field is
-  `Transaction Date`. Never read `actual_*` fields.
+- Amounts are GST-inclusive, from the live field `Transaction Amount`. GST and work-use
+  values are not exported (the `GST Amount` and `Claimable %` settings stay, unused by
+  `run`). The live row-date field is `Transaction Date`. Never read `actual_*` fields.
+- Foreign-currency amounts are accepted unconverted, with a `currency` column and a note;
+  `AMOUNT_OVER_300` applies to AUD only.
 - Every document selected goes to `deductions.csv` or `review.csv`; tagged documents
   outside the FY are only counted in the manifest.
 - IBKR selection is correspondent-only: correspondent "Interactive Brokers". The
@@ -86,7 +89,7 @@ release. Do not disable or weaken those checks to get a change through.
   IBKR marker, and is only counted as metadata by the audit's `--tax-info-tag`.
   Document types are a column, not a filter. A document in both sets appears in both
   outputs with one warning line and no review code. A missing correspondent is a
-  warning and a header-only `ibkr-documents.csv`, never an error.
+  warning and a header-only `investments.csv`, never an error.
 - The Paperless document ID is the traceability key on every row. No URLs in any CSV.
 
 ## Working style

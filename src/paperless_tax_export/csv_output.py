@@ -7,9 +7,8 @@ text cells prefixed with a single quote when they start with a spreadsheet
 formula character (``= + - @ \\t \\r \\n``). Decimal and date cells are never
 guarded.
 
-``work_use_pct`` is a float custom-field value. It is rendered with plain
-formatting (``f"{value:.2f}"``) straight from the stored number so the output
-is deterministic — no float arithmetic ever happens here.
+Decimal cells are rendered from the stored ``Decimal`` with ``f"{value:.2f}"``,
+so the output is deterministic.
 """
 
 from __future__ import annotations
@@ -29,24 +28,26 @@ DEDUCTIONS_COLUMNS: tuple[tuple[str, str], ...] = (
     ("supplier_name", "text"),
     ("description", "text"),
     ("amount_inc_gst", "decimal"),
-    ("gst_amount", "decimal"),
+    ("currency", "text"),
     ("document_type", "text"),
-    ("work_use_pct", "decimal"),
-    ("document_modified", "date"),
     ("notes_for_agent", "text"),
 )
 
-REVIEW_COLUMNS: tuple[tuple[str, str], ...] = DEDUCTIONS_COLUMNS + (
-    ("title", "text"),
-    ("correspondent", "text"),
-    ("created", "date"),
-    ("tags", "text"),
+# Defined independently of DEDUCTIONS_COLUMNS: the two files no longer share a prefix.
+REVIEW_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("paperless_document_id", "text"),
     ("reason_codes", "text"),
-    ("raw_amount", "text"),
-    ("raw_date", "text"),
+    ("date", "date"),
+    ("correspondent", "text"),
+    ("title", "text"),
+    ("amount_inc_gst", "decimal"),
+    ("currency", "text"),
+    ("document_type", "text"),
+    ("created", "date"),
+    ("notes_for_agent", "text"),
 )
 
-IBKR_COLUMNS: tuple[str, ...] = (
+INVESTMENTS_COLUMNS: tuple[str, ...] = (
     "paperless_document_id",
     "title",
     "created",
@@ -94,8 +95,6 @@ def _cell(row: ClassifiedRow, name: str, kind: str) -> str:
         return "" if value is None else f"{value:.2f}"
     if name == "reason_codes":
         return ";".join(code.value for code in row.reason_codes)
-    if name == "tags":
-        return _formula_guard("; ".join(sorted(row.tags)))
     raw = getattr(row, _ATTR_BY_COLUMN.get(name, name))
     return "" if raw is None else _formula_guard(str(raw))
 
@@ -106,8 +105,8 @@ def _formula_guard(text: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
-class IbkrRow:
-    """One line of the IBKR documents index; ``created`` is an ISO date."""
+class InvestmentRow:
+    """One line of the investments index; ``created`` is an ISO date."""
 
     document_id: int
     title: str
@@ -116,24 +115,24 @@ class IbkrRow:
     correspondent: str | None
 
 
-def write_ibkr_csv(path: Path, *, rows: Sequence[IbkrRow]) -> None:
-    """Write the IBKR index under the same byte contract as :func:`write_csv`.
+def write_investments_csv(path: Path, *, rows: Sequence[InvestmentRow]) -> None:
+    """Write the investments index under the same byte contract as :func:`write_csv`.
 
     Rows are sorted by ``(created, paperless_document_id)``; with no rows the
     file holds the header only.
     """
-    path.write_bytes(render_ibkr_csv_bytes(rows))
+    path.write_bytes(render_investments_csv_bytes(rows))
 
 
-def render_ibkr_csv_bytes(rows: Sequence[IbkrRow]) -> bytes:
-    """The exact bytes :func:`write_ibkr_csv` writes (BOM included), for hashing."""
-    return _render_ibkr_csv(rows).encode("utf-8-sig")
+def render_investments_csv_bytes(rows: Sequence[InvestmentRow]) -> bytes:
+    """The exact bytes :func:`write_investments_csv` writes (BOM included), for hashing."""
+    return _render_investments_csv(rows).encode("utf-8-sig")
 
 
-def _render_ibkr_csv(rows: Sequence[IbkrRow]) -> str:
+def _render_investments_csv(rows: Sequence[InvestmentRow]) -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\r\n")
-    writer.writerow(IBKR_COLUMNS)
+    writer.writerow(INVESTMENTS_COLUMNS)
     for row in sorted(rows, key=lambda item: (item.created, item.document_id)):
         writer.writerow(
             [

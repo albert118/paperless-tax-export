@@ -29,7 +29,6 @@ class ReviewCode(StrEnum):
     MISSING_SUPPLIER = "MISSING_SUPPLIER"
     AMOUNT_UNPARSEABLE = "AMOUNT_UNPARSEABLE"
     NEGATIVE_AMOUNT = "NEGATIVE_AMOUNT"
-    FOREIGN_CURRENCY = "FOREIGN_CURRENCY"
     DATE_OUT_OF_FY = "DATE_OUT_OF_FY"
     AMOUNT_OVER_300 = "AMOUNT_OVER_300"
     DUPLICATE_SUSPECT = "DUPLICATE_SUSPECT"
@@ -57,19 +56,15 @@ def parse_amount(raw: str | int | None, *, default_currency: str | None) -> Pars
     """Parse an amount value without ever raising.
 
     A failed parse yields ``ParsedAmount(None, None, AMOUNT_UNPARSEABLE)`` —
-    never a fabricated zero. A non-AUD currency still returns the parsed amount
-    together with code ``FOREIGN_CURRENCY`` so the caller can decide.
+    never a fabricated zero. The amount is returned with its currency code;
+    deciding what a non-AUD currency means is the caller's job.
     """
     if raw is None:
         return ParsedAmount(None, None, ReviewCode.AMOUNT_UNPARSEABLE)
 
     if isinstance(raw, int):
         currency = default_currency or "AUD"
-        return ParsedAmount(
-            amount=Decimal(raw),
-            currency=currency,
-            code=_currency_code(currency),
-        )
+        return ParsedAmount(amount=Decimal(raw), currency=currency, code=None)
 
     stripped = raw.strip()
     if not stripped:
@@ -84,15 +79,7 @@ def parse_amount(raw: str | int | None, *, default_currency: str | None) -> Pars
         amount = Decimal(match.group("num").replace(",", ""))
     except InvalidOperation, ValueError:
         return ParsedAmount(None, None, ReviewCode.AMOUNT_UNPARSEABLE)
-    return ParsedAmount(
-        amount=amount,
-        currency=currency,
-        code=_currency_code(currency),
-    )
-
-
-def _currency_code(currency: str) -> ReviewCode | None:
-    return ReviewCode.FOREIGN_CURRENCY if currency != "AUD" else None
+    return ParsedAmount(amount=amount, currency=currency, code=None)
 
 
 def parse_date(raw: str | None) -> str | None:
