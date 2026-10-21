@@ -32,6 +32,7 @@ _RECORDS = sorted(_RECORDS_DIR.glob("*.json"))
 _RECORD_IDS = [path.name for path in _RECORDS]
 _PARTIAL_FAILURE_RECORD = _RECORDS_DIR / "audit-live-2026-10-20T1527Z.json"
 _POST_FIX_RECORD = _RECORDS_DIR / "audit-live-2026-10-20T1554Z.json"
+_V010_RECORD = _RECORDS_DIR / "audit-live-2026-10-21-0.1.0.json"
 
 
 def _load_record(path: Path) -> dict[str, Any]:
@@ -186,6 +187,112 @@ def test_post_fix_recording_matches_the_configured_names() -> None:
     assert settings.field_amount in expected_names
     assert recorded["deduction_document_count"] > 0
     assert recorded["storage_paths"], "the FY storage path should be recorded"
+
+
+@pytest.mark.parametrize("path", _RECORDS, ids=_RECORD_IDS)
+def test_archived_version_counts_sum_to_the_deduction_count(path: Path) -> None:
+    """Counted plus none is the FY deduction set, whenever a recording has the counts."""
+    recorded = _load_record(path)
+    if "archived_version_count" not in recorded:
+        pytest.skip(f"{path.name} predates the archived-version counts")
+
+    total = recorded["archived_version_count"] + recorded["no_archived_version_count"]
+
+    assert total == recorded["deduction_document_count"]
+
+
+@pytest.mark.parametrize("path", _RECORDS, ids=_RECORD_IDS)
+def test_field_coverage_sums_to_the_deduction_count(path: Path) -> None:
+    """Present, null and absent partition the FY deduction set for every field."""
+    recorded = _load_record(path)
+    if not recorded.get("coverage"):
+        pytest.skip(f"{path.name} recorded no field coverage")
+
+    for entry in recorded["coverage"]:
+        parts = entry["present_count"] + entry["null_count"] + entry["absent_count"]
+        assert parts == recorded["deduction_document_count"], entry["field_name"]
+
+
+@pytest.mark.parametrize("path", _RECORDS, ids=_RECORD_IDS)
+def test_expected_field_coverage_matches_the_coverage_list(path: Path) -> None:
+    """The same field never reports two different coverages in one recording."""
+    recorded = _load_record(path)
+    by_id = {entry["field_id"]: entry for entry in recorded.get("coverage", [])}
+
+    for expected in recorded.get("expected_fields", []):
+        coverage = expected.get("coverage")
+        if coverage is not None:
+            assert by_id[coverage["field_id"]] == coverage, expected["name"]
+
+
+def test_v0_1_0_recording_pins_the_archived_version_denominators() -> None:
+    """The first live run with the archived-version counts: 4 counted, 10 without."""
+    recorded = _load_record(_V010_RECORD)
+
+    assert recorded["deduction_document_count"] == 14
+    assert recorded["archived_version_count"] == 4
+    assert recorded["no_archived_version_count"] == 10
+
+
+def test_v0_1_0_recording_shows_no_field_progress_beyond_the_amount() -> None:
+    """Only `Transaction Amount` is filled: 3 of 14. The other three fields are empty."""
+    settings = Settings()
+    recorded = _load_record(_V010_RECORD)
+    coverage = {entry["field_name"]: entry for entry in recorded["coverage"]}
+
+    assert coverage[settings.field_amount or ""]["present_count"] == 3
+    assert coverage[settings.field_amount or ""]["absent_count"] == 11
+    for name in (settings.field_date, settings.field_work_use, "Reference"):
+        assert coverage[name or ""]["present_count"] == 0, name
+        assert coverage[name or ""]["absent_count"] == 14, name
+
+
+def test_v0_1_0_recording_amount_field_is_monetary_with_a_wider_instance_footprint() -> None:
+    """The field holds amounts on 66 documents instance-wide but on 3 of the 14 tagged FY ones."""
+    recorded = _load_record(_V010_RECORD)
+    fields = {field["name"]: field for field in recorded["custom_fields"]}
+    amount = fields[Settings().field_amount or ""]
+
+    assert amount["data_type"] == "monetary"
+    assert amount["document_count"] == 66
+    assert amount["document_count"] > recorded["deduction_document_count"]
+
+
+def test_v0_1_0_recording_reads_every_optional_endpoint() -> None:
+    """Permissions and origin pinning hold: nothing is unavailable, the IBKR facts resolve."""
+    recorded = _load_record(_V010_RECORD)
+
+    assert recorded["unavailable"] == []
+    assert recorded["correspondents_visible"] == 184
+    assert recorded["ibkr"]["correspondent_exists"] is True
+    assert recorded["ibkr"]["correspondent_document_count"] == 24
+    assert recorded["tag_matches"] == [{"document_count": 48, "name": Settings().deduction_tag}]
+
+
+def test_v0_1_0_recording_keeps_the_origin_rewrite_visible() -> None:
+    """The proxy still advertises http links on 2026-10-21, so the fix is still outstanding."""
+    recorded = _load_record(_V010_RECORD)
+
+    assert any(
+        "http://" in note and "re-anchored to https://" in note for note in recorded["notes"]
+    )
+
+
+def test_v0_1_0_recording_does_not_list_the_date_field_among_expected_fields() -> None:
+    """Records today's audit gap: `Settings.field_date` is configured but not audited.
+
+    `expected_fields` covers the amount, GST and work-use settings only, so a
+    renamed `Transaction Date` field would not be reported as missing. When the
+    audit starts checking the date field, this recording predates it and the
+    assertion below documents the difference rather than a requirement.
+    """
+    settings = Settings()
+    recorded = _load_record(_V010_RECORD)
+    expected_names = {field["name"] for field in recorded["expected_fields"]}
+
+    assert settings.field_date is not None
+    assert settings.field_date not in expected_names
+    assert settings.field_date in {entry["field_name"] for entry in recorded["coverage"]}
 
 
 @pytest.mark.parametrize("path", _RECORDS, ids=_RECORD_IDS)
