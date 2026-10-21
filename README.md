@@ -6,8 +6,8 @@ It reads one financial year of documents from Paperless and produces CSVs an acc
 can work from, plus a review list of the documents a human still has to decide on.
 
 Both `audit` and `run` talk to Paperless: `audit` reports how the live instance lines up
-with the settings, and `run` classifies the FY documents and writes `deductions.csv` and
-`review.csv`.
+with the settings, and `run` classifies the FY documents and writes `deductions.csv`,
+`review.csv` and `ibkr-documents.csv`.
 
 ## What it produces
 
@@ -15,7 +15,7 @@ with the settings, and `run` classifies the FY documents and writes `deductions.
 | --- | --- |
 | `review.csv` | Documents that need a human decision, with reason codes. The priority output. |
 | `deductions.csv` | Documents that pass every check. |
-| `ibkr-documents.csv` | Index of Interactive Brokers statements for the year. |
+| `ibkr-documents.csv` | Index of Interactive Brokers statements for the year (header only, plus a warning, when the correspondent is missing). A document that also carries the deduction tag appears here and in the deduction outputs, with a warning. |
 | `manifest.json` | Run parameters, Paperless version, counts and file hashes. |
 
 All files go into `output/`, which is never committed.

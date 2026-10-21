@@ -25,7 +25,8 @@ subcommand (plus `--version`) that reads the live Paperless instance read-only a
 reports how it lines up with the export settings (`output/audit.json`). The audit is a
 diagnostic, not a gate: a missing tag, zero matching documents, missing fields and zero
 coverage are printed findings and the exit code stays 0. The `run` subcommand
-classifies the FY documents and writes `deductions.csv` and `review.csv`.
+classifies the FY documents and writes `deductions.csv` and `review.csv`, plus
+`ibkr-documents.csv` (the IBKR correspondent's FY documents).
 
 In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_export/`,
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,
@@ -73,8 +74,9 @@ release. Do not disable or weaken those checks to get a change through.
 - IBKR selection is correspondent-only: correspondent "Interactive Brokers". The
   `tax-information` tag is general tax metadata (190 documents, all years), not an
   IBKR marker, and is only counted as metadata by the audit's `--tax-info-tag`.
-  Document types are a column, not a filter. A document in both sets goes to review,
-  in neither CSV.
+  Document types are a column, not a filter. A document in both sets appears in both
+  outputs with one warning line and no review code. A missing correspondent is a
+  warning and a header-only `ibkr-documents.csv`, never an error.
 - The Paperless document ID is the traceability key on every row. No URLs in any CSV.
 
 ## Working style

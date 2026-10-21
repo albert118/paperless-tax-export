@@ -87,3 +87,33 @@ def select_documents(
         documents=tuple(documents),
         out_of_fy_count=total_tagged - len(documents),
     )
+
+
+def select_ibkr_documents(
+    client: PaperlessClient,
+    correspondent_name: str,
+    fy_start: str,
+    fy_end: str,
+) -> tuple[bool, tuple[Document, ...]]:
+    """Select the documents of one correspondent inside the inclusive FY window.
+
+    Returns ``(found, documents)``. A correspondent that does not exist is not
+    an error: the result is ``(False, ())`` and the caller decides how to
+    report it. The name is matched exactly; more than one correspondent with
+    that name is ambiguous and raises ``StartupError``. Documents are sorted
+    by ``(created date, document id)``.
+    """
+    matches = [item for item in client.list_correspondents() if item.name == correspondent_name]
+    if not matches:
+        return False, ()
+    if len(matches) > 1:
+        raise StartupError(
+            f"expected at most one correspondent named {correspondent_name!r}, found {len(matches)}"
+        )
+    documents = client.list_documents(
+        correspondent_id=matches[0].id,
+        created_from=fy_start,
+        created_to=fy_end,
+    )
+    ordered = sorted(documents, key=lambda document: (document.created[:10], document.id))
+    return True, tuple(ordered)
