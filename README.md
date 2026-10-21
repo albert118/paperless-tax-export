@@ -114,7 +114,9 @@ defaults to the directory `run` writes into.
   of `ibkr-documents.csv`, and `accepted + review` equals `selected_in_fy`.
 - It prints one `OK` or `MISMATCH` line per file, one line per failed check and a summary.
   Files in the directory that the manifest does not list (`audit.json`, `manifest.json`)
-  produce one `note:` line, never a failure. It never prints file contents.
+  produce one `note:` line, never a failure. It never prints file contents. A listed file
+  that is a symbolic link, a directory or a device is reported as `UNREADABLE` (exit 4);
+  `verify` does not follow links.
 - Exit 0 when everything matches. Exit 4 for any hash, row or count mismatch, or a listed
   file that is missing. Exit 2 when `manifest.json` is missing, unreadable, not valid JSON
   or lacks the expected keys or types.

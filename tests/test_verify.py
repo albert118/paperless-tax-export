@@ -323,6 +323,91 @@ def test_wrong_manifest_shape_is_a_usage_error(
     assert message in err
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "..",
+        ".",
+        "/etc/passwd",
+        "C:foo",
+        "a" + chr(0) + "b",
+        "dir/x.csv",
+        r"dir\x.csv",
+        "x.csv:stream",
+    ],
+)
+def test_unsafe_listed_names_are_a_usage_error(
+    name: str, output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _edit_manifest(output, _set(("outputs", name), {"sha256": "0" * 64, "rows": 0}))
+    code, out, err = _verify(output, capsys)
+    assert code == 2
+    assert out == ""
+    assert "not a file name" in err
+    assert "Traceback" not in err
+
+
+def test_device_name_listed_in_the_manifest_never_reads_as_ok(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    empty = hashlib.sha256(b"").hexdigest()
+    _edit_manifest(output, _set(("outputs", "NUL"), {"sha256": empty, "rows": 0}))
+    code, out, _ = _verify(output, capsys)
+    assert code == 4
+    assert "OK NUL" not in out
+
+
+def test_directory_named_like_a_csv_is_unreadable_not_ok(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (output / "review.csv").unlink()
+    (output / "review.csv").mkdir()
+    code, out, _ = _verify(output, capsys)
+    assert code == 4
+    assert "UNREADABLE review.csv: is not a regular file" in out
+
+
+def test_uppercase_hex_in_the_manifest_is_accepted_when_it_matches(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def edit(payload: dict[str, Any]) -> None:
+        entry = payload["outputs"]["review.csv"]
+        entry["sha256"] = entry["sha256"].upper()
+
+    _edit_manifest(output, edit)
+    code, out, _ = _verify(output, capsys)
+    assert code == 0
+    assert "OK review.csv" in out
+
+
+def test_symlinked_listed_file_is_a_failure(
+    output: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = tmp_path / "elsewhere.csv"
+    target.write_bytes((output / "review.csv").read_bytes())
+    (output / "review.csv").unlink()
+    try:
+        (output / "review.csv").symlink_to(target)
+    except OSError, NotImplementedError:
+        pytest.skip("this OS refuses to create symlinks without privileges")
+    code, out, _ = _verify(output, capsys)
+    assert code == 4
+    assert "UNREADABLE review.csv: is a symbolic link" in out
+
+
+def test_unlistable_directory_is_a_note_not_a_traceback(
+    output: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def refuse(_directory: Path) -> object:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "iterdir", refuse)
+    code, out, err = _verify(output, capsys)
+    assert code == 0
+    assert "note: could not list the directory: Permission denied" in out
+    assert "Traceback" not in err
+
+
 def test_manifest_that_is_not_an_object_is_a_usage_error(
     output: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

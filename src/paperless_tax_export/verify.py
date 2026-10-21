@@ -32,7 +32,7 @@ from paperless_tax_export.manifest import (
     ManifestCounts,
 )
 
-_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 _REQUIRED_OUTPUTS = (DEDUCTIONS_FILE, REVIEW_FILE, IBKR_FILE)
 
 
@@ -123,7 +123,7 @@ def _parse_outputs(value: object) -> dict[str, ExpectedFile]:
             raise ManifestError(
                 f"{MANIFEST_FILE} 'outputs.{name}.rows' must be a non-negative integer"
             )
-        outputs[name] = ExpectedFile(sha256=digest, rows=rows)
+        outputs[name] = ExpectedFile(sha256=digest.lower(), rows=rows)
     for required in _REQUIRED_OUTPUTS:
         if required not in outputs:
             raise ManifestError(f"{MANIFEST_FILE} 'outputs' does not list {required}")
@@ -150,6 +150,8 @@ def _is_plain_file_name(name: object) -> bool:
         and name not in {"", ".", ".."}
         and "/" not in name
         and "\\" not in name
+        and ":" not in name
+        and "\0" not in name
     )
 
 
@@ -208,13 +210,13 @@ def verify_directory(directory: Path) -> VerifyReport:
     file_problems = 0
     for name, expected in sorted(manifest.outputs.items()):
         try:
-            content = (directory / name).read_bytes()
+            content = _read_listed_file(directory / name)
         except FileNotFoundError:
             lines.append(f"MISSING {name}: listed in the manifest but not found")
             file_problems += 1
             continue
-        except OSError as exc:
-            lines.append(f"UNREADABLE {name}: {exc.strerror or type(exc).__name__}")
+        except _UnreadableFileError as exc:
+            lines.append(f"UNREADABLE {name}: {exc}")
             file_problems += 1
             continue
         result = check_file(name, expected, content)
@@ -224,9 +226,13 @@ def verify_directory(directory: Path) -> VerifyReport:
             rows_by_file[name] = result.rows
     failures = check_consistency(manifest.counts, rows_by_file)
     lines.extend(failures)
-    unlisted = _unlisted_names(directory, manifest.outputs)
-    if unlisted:
-        lines.append(f"note: not listed in the manifest: {', '.join(unlisted)}")
+    try:
+        unlisted = _unlisted_names(directory, manifest.outputs)
+    except OSError as exc:
+        lines.append(f"note: could not list the directory: {exc.strerror or type(exc).__name__}")
+    else:
+        if unlisted:
+            lines.append(f"note: not listed in the manifest: {', '.join(unlisted)}")
     problems = file_problems + len(failures)
     total = len(manifest.outputs)
     if problems:
@@ -236,6 +242,29 @@ def verify_directory(directory: Path) -> VerifyReport:
     else:
         lines.append(f"verify OK: {total} files match the manifest")
     return VerifyReport(lines=tuple(lines), problems=problems)
+
+
+class _UnreadableFileError(Exception):
+    """A listed entry exists but cannot be verified; the message is the reason."""
+
+
+def _read_listed_file(path: Path) -> bytes:
+    """Bytes of a listed output: a regular file, not a symlink, device or directory.
+
+    Raises ``FileNotFoundError`` when nothing is there and ``_UnreadableFileError``
+    for every other reason the entry cannot be read.
+    """
+    if path.is_symlink():
+        raise _UnreadableFileError("is a symbolic link; verify does not follow links")
+    if not path.exists():
+        raise FileNotFoundError(path.name)
+    if not path.is_file():
+        raise _UnreadableFileError("is not a regular file")
+    try:
+        return path.read_bytes()
+    except (OSError, ValueError) as exc:
+        reason = getattr(exc, "strerror", None) or type(exc).__name__
+        raise _UnreadableFileError(str(reason)) from exc
 
 
 def _read_manifest(directory: Path) -> bytes:
