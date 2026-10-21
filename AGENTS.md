@@ -81,7 +81,10 @@ release. Do not disable or weaken those checks to get a change through.
   values are not exported (the `GST Amount` and `Claimable %` settings stay, unused by
   `run`). The live row-date field is `Transaction Date`. Never read `actual_*` fields.
 - Foreign-currency amounts are accepted unconverted, with a `currency` column and a note;
-  `AMOUNT_OVER_300` applies to AUD only.
+  `AMOUNT_OVER_300` applies to AUD only. A document carrying the reviewed tag (default
+  `asset-reviewed`, `run --asset-reviewed-tag`, recorded as `parameters.asset_reviewed_tag`
+  in the manifest) loses that one code and nothing else; the name must differ from the
+  deduction tag.
 - A zero amount in any currency gets the blocking `ZERO_AMOUNT` code and goes to
   `review.csv`, never `deductions.csv`.
 - Every document selected goes to `deductions.csv` or `review.csv`; tagged documents

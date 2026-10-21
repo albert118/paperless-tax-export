@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 from collections.abc import Callable
 from pathlib import Path
 
@@ -205,6 +207,76 @@ def test_disabling_the_reviewed_tag_keeps_over_300_rows_in_review_without_a_warn
     assert _asset_warnings(result.warnings) == ()
     manifest = (tmp_path / "out" / "manifest.json").read_text(encoding="utf-8")
     assert '"asset_reviewed_tag": null' in manifest
+
+
+def _tagged_documents(
+    amounts: dict[int, str], *, tag_ids: dict[int, list[int]]
+) -> list[dict[str, object]]:
+    """Deduction documents by id with the given amounts and tag ids (all tagged 1 as well)."""
+    return [
+        document_payload(
+            doc_id,
+            title=f"Item {doc_id}",
+            tags=[1, *tag_ids[doc_id]],
+            correspondent=5,
+            custom_fields=[{"field": 10, "value": amount}],
+        )
+        for doc_id, amount in amounts.items()
+    ]
+
+
+def test_every_paperless_tag_with_the_reviewed_name_clears_the_code(tmp_path: Path) -> None:
+    handler = make_handler(
+        tags=[
+            tag_payload(1, "tax deductible", document_count=2),
+            tag_payload(2, "asset-reviewed"),
+            tag_payload(3, "asset-reviewed"),
+        ],
+        documents=_tagged_documents({1: "350.00", 2: "351.00"}, tag_ids={1: [2], 2: [3]}),
+    )
+    result = run_export(Settings(), make_client(handler), output=tmp_path / "out")
+    assert (result.accepted_count, result.review_count) == (2, 0)
+    assert _asset_warnings(result.warnings) == ()
+
+
+def test_reviewed_tag_matching_is_exact_and_case_sensitive(tmp_path: Path) -> None:
+    handler = make_handler(
+        tags=[tag_payload(1, "tax deductible", document_count=1), tag_payload(2, "Asset-Reviewed")],
+        documents=_tagged_documents({1: "350.00"}, tag_ids={1: [2]}),
+    )
+    result = run_export(Settings(), make_client(handler), output=tmp_path / "out")
+    assert (result.accepted_count, result.review_count) == (0, 1)
+    assert len(_asset_warnings(result.warnings)) == 1
+
+
+def test_a_padded_reviewed_tag_name_is_not_trimmed_to_match(tmp_path: Path) -> None:
+    handler = make_handler(
+        tags=[tag_payload(1, "tax deductible", document_count=1), tag_payload(2, "x")],
+        documents=_tagged_documents({1: "350.00"}, tag_ids={1: [2]}),
+    )
+    result = run_export(
+        Settings(asset_reviewed_tag=" x "), make_client(handler), output=tmp_path / "out"
+    )
+    assert (result.accepted_count, result.review_count) == (0, 1)
+
+
+def test_reviewed_tag_clears_300_01_but_leaves_300_00_without_a_code_or_note(
+    tmp_path: Path,
+) -> None:
+    handler = make_handler(
+        tags=[tag_payload(1, "tax deductible", document_count=2), REVIEWED_TAG],
+        documents=_tagged_documents({1: "300.00", 2: "300.01"}, tag_ids={1: [2], 2: [2]}),
+    )
+    result = run_export(Settings(), make_client(handler), output=tmp_path / "out")
+    assert (result.accepted_count, result.review_count) == (2, 0)
+    rows = {
+        row["paperless_document_id"]: row
+        for row in csv.DictReader(
+            io.StringIO(read_bytes(tmp_path / "out" / "deductions.csv").decode("utf-8-sig"))
+        )
+    }
+    assert "over-300" not in rows["1"]["notes_for_agent"]
+    assert "over-300 reviewed (tag asset-reviewed)" in rows["2"]["notes_for_agent"]
 
 
 def test_missing_required_field_raises_startup_error(tmp_path: Path) -> None:

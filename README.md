@@ -103,7 +103,12 @@ changes, so the flag cannot clear itself: you clear it in Paperless.
 
 - To claim the item in full, tag the document with `asset-reviewed` (the default name; set
   another with `run --asset-reviewed-tag NAME`) and re-run. The row loses the code, goes
-  to `deductions.csv`, and `notes_for_agent` says `over-300 reviewed (tag asset-reviewed)`.
+  to `deductions.csv` (when no other code applies), and `notes_for_agent` says
+  `over-300 reviewed (tag asset-reviewed)`.
+- The tag name is matched exactly and case-sensitively against the Paperless tag name, so
+  `Asset-Reviewed` does not match. If several Paperless tags share the name, all of them
+  count. The name must differ from the deduction tag. The command line cannot disable the
+  check; only `Settings(asset_reviewed_tag=None)` does.
 - To depreciate it, or if you are unsure, leave the tag off. The row stays in `review.csv`
   for you and the accountant to settle.
 - The tag clears only this code. A zero or negative amount, a duplicate suspect, an income
@@ -214,7 +219,8 @@ defaults to the directory `run` writes into.
   `verify` does not follow links.
 - Exit 0 when everything matches. Exit 4 for any hash, row or count mismatch, or a listed
   file that is missing. Exit 2 when `manifest.json` is missing, unreadable, not valid JSON
-  or lacks the expected keys or types.
+  or lacks the expected keys or types, or lists a name that is not a plain file name (a path
+  separator, a colon, leading or trailing whitespace, a trailing dot).
 
 What it proves: the files are the bytes the run wrote, so it catches an accidental edit and
 a corrupted or truncated copy. What it does not prove: that the files match Paperless, or

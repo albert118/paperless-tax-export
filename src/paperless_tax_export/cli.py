@@ -263,6 +263,7 @@ def _settings_from_args(args: argparse.Namespace, sources: EnvSources) -> Settin
         deduction_tag=args.tag,
         tax_info_tag=args.tax_info_tag,
         ibkr_correspondent=args.ibkr_correspondent,
+        asset_reviewed_tag=None,
         fy_start=args.fy_start,
         fy_end=args.fy_end,
     )
