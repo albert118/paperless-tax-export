@@ -39,7 +39,10 @@ currency (there is no minor-unit table, so JPY is also written with two decimals
 A foreign-currency amount is accepted into `deductions.csv` as it is: it is never converted
 and has no review code. `notes_for_agent` says `foreign currency <CODE>; amount not
 converted to AUD` and `over-300 check not applied to <CODE>`. The `AMOUNT_OVER_300` review
-code applies to AUD amounts only; `NEGATIVE_AMOUNT` applies to every currency. Earlier
+code applies to AUD amounts only; `NEGATIVE_AMOUNT` applies to every currency. A zero
+amount (`0`, `0.00`, `-0.00`, `AUD0.00`, `USD0`) is blocking in every currency: it gets
+`ZERO_AMOUNT` and goes to `review.csv`, because a zero receipt is almost certainly a
+missing value or a placeholder. Earlier
 versions sent foreign-currency amounts to `review.csv` under a `FOREIGN_CURRENCY` code,
 which no longer exists.
 

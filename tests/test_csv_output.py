@@ -182,6 +182,22 @@ def test_reason_codes_are_joined_with_semicolons(tmp_path: Path) -> None:
     assert first_data_cells(path)[1] == "NEGATIVE_AMOUNT;INCOME_TAGGED"
 
 
+def test_zero_amount_code_is_written_in_review_reason_codes(tmp_path: Path) -> None:
+    path = tmp_path / "review.csv"
+    write_csv(
+        path,
+        rows=[
+            make_row(
+                1,
+                codes=(ReviewCode.ZERO_AMOUNT, ReviewCode.DATE_OUT_OF_FY),
+                amount=Decimal("0.00"),
+            )
+        ],
+        columns=REVIEW_COLUMNS,
+    )
+    assert first_data_cells(path)[1] == "ZERO_AMOUNT;DATE_OUT_OF_FY"
+
+
 def _two_row_fixture() -> list[ClassifiedRow]:
     return [
         make_row(
