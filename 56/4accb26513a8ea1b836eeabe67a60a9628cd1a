@@ -1,0 +1,23 @@
+README.md
+  s_282e57b22cffc6::t_3174e03e46cae1 117-119
+src/paperless_tax_export/verify.py
+  s_282e57b22cffc6::t_fd9b4cd7d106ea 35,126,153-154,213,218-219,229-235,247-269
+tests/test_verify.py
+  s_282e57b22cffc6::t_a75bdbaa3c0ef3 326-410
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "564accb26513a8ea1b836eeabe67a60a9628cd1a",
+  "prompts": {},
+  "sessions": {
+    "s_282e57b22cffc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a977fe996d7333dbc",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
