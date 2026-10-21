@@ -45,14 +45,7 @@ def make_row(
         amount_inc_gst=amount,
         gst_amount=gst,
         document_type=document_type,
-        category_label="",
-        claim_type="",
         work_use_pct=work_use,
-        apportionment_basis="",
-        reimbursed="",
-        wfh_method="",
-        asset_cost_inc_gst=None,
-        asset_set_id="",
         document_modified=modified,
         notes_for_agent=notes,
         title=title,
@@ -129,7 +122,7 @@ def test_null_cells_render_blank(tmp_path: Path) -> None:
     cells = line.split(",")
     assert cells[4] == ""  # amount_inc_gst
     assert cells[5] == ""  # gst_amount
-    assert cells[9] == ""  # work_use_pct
+    assert cells[7] == ""  # work_use_pct
     assert cells[6] == ""  # document_type
 
 
@@ -172,7 +165,7 @@ def test_work_use_pct_renders_from_the_raw_float(tmp_path: Path) -> None:
     write_csv(path, rows=[make_row(1, work_use=100.0)], columns=REVIEW_COLUMNS)
     text = read_bytes(path).decode("utf-8-sig")
     line = text.split("\r\n")[1]
-    assert line.split(",")[9] == "100.00"
+    assert line.split(",")[7] == "100.00"
 
 
 def test_full_expected_bytes_for_a_two_row_fixture(tmp_path: Path) -> None:
@@ -218,11 +211,11 @@ def test_full_expected_bytes_for_a_two_row_fixture(tmp_path: Path) -> None:
 
     header = ",".join(name for name, _kind in REVIEW_COLUMNS)
     row_two = (
-        "2,2025-07-15,'=SUM(A1),Invoice,-12.34,,,,,,,,,,,2025-07-15,amount missing,"
+        "2,2025-07-15,'=SUM(A1),Invoice,-12.34,,,,2025-07-15,amount missing,"
         "Invoice,,2025-07-15,income,NEGATIVE_AMOUNT;INCOME_TAGGED,'-12.34,"
     )
     row_seven = (
-        "7,2025-10-01,Acme Pty Ltd,Grocery run,123.40,0.00,Receipt,,,100.00,,,,,,"
+        "7,2025-10-01,Acme Pty Ltd,Grocery run,123.40,0.00,Receipt,100.00,"
         "2025-10-01,,Grocery run,Coles,2025-10-01,low-value; personal,,123.40,2025-10-01"
     )
     expected = BOM + "\r\n".join([header, row_two, row_seven]) + "\r\n"
@@ -237,6 +230,38 @@ def test_deductions_file_uses_the_deduction_column_contract(tmp_path: Path) -> N
     assert header == ",".join(name for name, _kind in DEDUCTIONS_COLUMNS)
     assert "title" not in header
     assert "reason_codes" not in header
+
+
+EXPECTED_DEDUCTIONS_HEADER = (
+    "paperless_document_id,date,supplier_name,description,amount_inc_gst,gst_amount,"
+    "document_type,work_use_pct,document_modified,notes_for_agent"
+)
+REMOVED_COLUMNS = (
+    "category_label",
+    "claim_type",
+    "apportionment_basis",
+    "reimbursed",
+    "wfh_method",
+    "asset_cost_inc_gst",
+    "asset_set_id",
+)
+
+
+def test_deductions_columns_are_pinned() -> None:
+    assert ",".join(name for name, _kind in DEDUCTIONS_COLUMNS) == EXPECTED_DEDUCTIONS_HEADER
+    assert len(DEDUCTIONS_COLUMNS) == 10
+
+
+def test_removed_columns_are_absent_from_both_headers(tmp_path: Path) -> None:
+    for filename, columns in (
+        ("deductions.csv", DEDUCTIONS_COLUMNS),
+        ("review.csv", REVIEW_COLUMNS),
+    ):
+        path = tmp_path / filename
+        write_csv(path, rows=[make_row(1)], columns=columns)
+        header = read_bytes(path).decode("utf-8-sig").split("\r\n")[0].split(",")
+        assert "work_use_pct" in header
+        assert not set(REMOVED_COLUMNS) & set(header)
 
 
 def test_duplicate_write_is_byte_identical(tmp_path: Path) -> None:

@@ -20,8 +20,8 @@ Three-state rule for custom fields (applied everywhere in this module)
 
 ``notes_for_agent`` carries only per-document informational gaps (never
 settings-level facts, never blocking codes restated): "amount missing", "date
-from created", "work-use field not recorded" and "GST value not recorded", in
-that fixed order, joined with ``"; "``.
+from created" and "GST value not recorded", in that fixed order, joined with
+``"; "``. A blank work-use value is not noted: it means "not apportioned".
 """
 
 from __future__ import annotations
@@ -63,10 +63,7 @@ class ClassifiedRow:
     """One classified document, mirroring the CSV output columns.
 
     ``date`` is the resolved row date (a valid field value or the document's
-    ``created`` date part), never empty. ``category_label``, ``claim_type``,
-    ``apportionment_basis``, ``reimbursed``, ``wfh_method`` and ``asset_set_id``
-    are emitted as blank columns in this stage (no settings drive them yet);
-    ``asset_cost_inc_gst`` stays ``None`` for the same reason.
+    ``created`` date part), never empty.
     """
 
     document_id: int
@@ -76,14 +73,7 @@ class ClassifiedRow:
     amount_inc_gst: Decimal | None
     gst_amount: Decimal | None
     document_type: str
-    category_label: str
-    claim_type: str
     work_use_pct: float | None
-    apportionment_basis: str
-    reimbursed: str
-    wfh_method: str
-    asset_cost_inc_gst: Decimal | None
-    asset_set_id: str
     document_modified: str
     notes_for_agent: str
     title: str
@@ -232,7 +222,7 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
     work_use_field = context.work_use_field
     if work_use_field is not None and document.has_field(work_use_field.id):
         work_use_pct = _float_value(document.field_value(work_use_field.id))
-    # Work-use is informational only: a blank value produces a note, never a code.
+    # Work-use is informational only: a blank value produces neither a note nor a code.
 
     document_type = (
         context.document_types.get(document.document_type, "")
@@ -248,8 +238,6 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
         notes.append("amount missing")
     if date_field is not None and date_from_created:
         notes.append("date from created")
-    if work_use_field is not None and work_use_pct is None:
-        notes.append("work-use field not recorded")
     if gst_field is not None and gst_amount is None:
         notes.append("GST value not recorded")
 
@@ -263,14 +251,7 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
         amount_inc_gst=amount,
         gst_amount=gst_amount,
         document_type=document_type,
-        category_label="",
-        claim_type="",
         work_use_pct=work_use_pct,
-        apportionment_basis="",
-        reimbursed="",
-        wfh_method="",
-        asset_cost_inc_gst=None,
-        asset_set_id="",
         document_modified=document.modified[:10],  # ISO 8601 like `created`
         notes_for_agent="; ".join(notes),
         title=document.title,

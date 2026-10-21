@@ -659,9 +659,7 @@ def test_notes_cover_only_document_level_informational_gaps() -> None:
     _, row = classify_one(
         healthy_doc(1, custom_fields=[{"field": F_DATE.id, "value": None}]), context
     )
-    assert row.notes_for_agent == (
-        "amount missing; date from created; work-use field not recorded; GST value not recorded"
-    )
+    assert row.notes_for_agent == "amount missing; date from created; GST value not recorded"
 
 
 def test_notes_are_empty_when_there_are_no_gaps() -> None:
@@ -707,7 +705,18 @@ def test_work_use_none_setting_leaves_column_blank_without_code() -> None:
         healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": "100.00"}]), context
     )
     assert row.work_use_pct is None
-    assert "work-use field not recorded" not in row.notes_for_agent
+    assert "work-use" not in row.notes_for_agent
+    assert row.reason_codes == ()
+    assert row in classification.accepted
+
+
+def test_blank_work_use_stays_blank_without_note_or_code() -> None:
+    context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
+    classification, row = classify_one(
+        healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": "100.00"}]), context
+    )
+    assert row.work_use_pct is None
+    assert "work-use" not in row.notes_for_agent
     assert row.reason_codes == ()
     assert row in classification.accepted
 
