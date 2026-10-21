@@ -295,6 +295,33 @@ def test_empty_token_file_is_rejected_for_flag_and_default(
     assert "paperless-token.txt" in capsys.readouterr().err
 
 
+def test_empty_token_message_says_it_does_not_fall_through(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    monkeypatch.setenv("PAPERLESS_TOKEN", "")
+    assert main(_argv("audit", tmp_path)) == 2
+    assert "does not fall through" in capsys.readouterr().err
+
+
+def test_missing_token_in_named_env_file_is_mentioned_when_default_file_fails(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    env_file = _file(tmp_path, "paperless.env", 'PAPERLESS_TOKEN="unterminated\n')
+    code = main(_argv("audit", tmp_path, "--env-file", str(env_file)))
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "PAPERLESS_TOKEN was also not found in env file" in err
+    assert str(env_file) in err
+    assert "unterminated" not in err
+
+
+def test_missing_token_without_an_env_file_has_no_env_file_hint(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    assert main(_argv("audit", tmp_path)) == 2
+    assert "env file" not in capsys.readouterr().err
+
+
 def test_empty_real_env_token_does_not_fall_through_to_dotenv(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:

@@ -74,12 +74,27 @@ def resolve_token(token_file_flag: Path | None, default_file: Path, sources: Env
         return _read_token_file(token_file_flag)
     found = sources.lookup(ENV_TOKEN)
     if found is None:
-        return _read_token_file(default_file)
+        return _read_default_token_file(default_file, sources.env_file)
     value, source = found
     token = value.strip()
     if not token:
-        raise SettingsError(f"token from {source} is empty")
+        raise SettingsError(
+            f"token from {source} is empty; an empty value does not fall through"
+            " to the env file or the default token file"
+        )
     return token
+
+
+def _read_default_token_file(default_file: Path, env_file: Path | None) -> str:
+    try:
+        return _read_token_file(default_file)
+    except SettingsError as exc:
+        if env_file is None:
+            raise
+        raise SettingsError(
+            f"{exc}; {ENV_TOKEN} was also not found in env file '{env_file}'"
+            " (check the file for a missing or malformed line)"
+        ) from exc
 
 
 def _read_env_file(path: Path) -> dict[str, str]:

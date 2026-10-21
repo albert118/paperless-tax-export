@@ -122,6 +122,13 @@ Its entries are parsed, not exported, so a real environment variable always wins
 empty or whitespace-only token, or an unreadable `--env-file`, exits 2. Error messages
 name the source, never the value.
 
+The first source that sets a value wins even when that value is empty: a blank
+`PAPERLESS_TOKEN=` (for example from `${PAPERLESS_TOKEN:-}` in compose) is an error and
+does not fall through to the env file or the default token file. If the env file has no
+usable `PAPERLESS_TOKEN` line, check it for a missing or malformed line. The dotenv file
+is parsed by python-dotenv, not by compose, so write the token without `$`, quotes or
+`#`; a Paperless token is plain hex.
+
 Example dotenv file (placeholder values):
 
 ```dotenv
