@@ -10,6 +10,8 @@ with the settings, and `run` classifies the FY documents and writes `deductions.
 `review.csv` and `ibkr-documents.csv`.
 `verify` talks to nothing: it re-checks a finished output directory against its manifest.
 
+To run it in Docker next to Paperless-ngx, see [examples/README.md](examples/README.md).
+
 ## What it produces
 
 | File | Contents |
