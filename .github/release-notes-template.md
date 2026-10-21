@@ -18,7 +18,7 @@ release candidates (vX.Y.Z-rc.N). Delete this comment before publishing.
 
 ## Output files
 
-<!-- Changes to review.csv, deductions.csv, ibkr-documents.csv or manifest.json. Same input still gives byte-identical output unless stated here. -->
+<!-- Changes to review.csv, deductions.csv, investments.csv or manifest.json. Same input still gives byte-identical output unless stated here. -->
 
 ## Image
 

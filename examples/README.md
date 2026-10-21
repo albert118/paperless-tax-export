@@ -50,6 +50,6 @@ Files go to the mounted directory (`/app/output` in the container):
 
 - `review.csv`: documents that need a human decision, with reason codes.
 - `deductions.csv`: documents that pass every check.
-- `ibkr-documents.csv`: index of Interactive Brokers statements.
+- `investments.csv`: index of the configured investing correspondent's statements.
 - `manifest.json`: parameters, versions, counts and file hashes.
 - `audit.json`: written by `audit`.

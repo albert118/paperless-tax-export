@@ -20,8 +20,10 @@ Three-state rule for custom fields (applied everywhere in this module)
 
 ``notes_for_agent`` carries only per-document informational gaps (never
 settings-level facts, never blocking codes restated): "amount missing", "date
-from created" and "GST value not recorded", in that fixed order, joined with
-``"; "``. A blank work-use value is not noted: it means "not apportioned".
+from created" and, for a non-AUD amount, "foreign currency <CODE>; amount not
+converted to AUD" followed by "over-300 check not applied to <CODE>", in that
+fixed order, joined with ``"; "``. A foreign-currency amount is accepted as it is
+and never gets a review code of its own; ``AMOUNT_OVER_300`` applies to AUD only.
 """
 
 from __future__ import annotations
@@ -38,6 +40,8 @@ from paperless_tax_export.models import (
 from paperless_tax_export.parsing import ReviewCode, parse_amount, parse_date
 from paperless_tax_export.settings import Settings
 
+AUD = "AUD"
+
 # ReviewCode declaration order, so codes can be re-sorted deterministically.
 _CODE_ORDER: tuple[ReviewCode, ...] = tuple(ReviewCode)
 
@@ -48,8 +52,6 @@ class ClassifyContext:
 
     settings: Settings
     amount_field: CustomFieldDef | None
-    gst_field: CustomFieldDef | None
-    work_use_field: CustomFieldDef | None
     date_field: CustomFieldDef | None
     supplier_field: CustomFieldDef | None
     correspondents: Mapping[int, str]
@@ -71,9 +73,8 @@ class ClassifiedRow:
     supplier_name: str
     description: str
     amount_inc_gst: Decimal | None
-    gst_amount: Decimal | None
+    currency: str
     document_type: str
-    work_use_pct: float | None
     document_modified: str
     notes_for_agent: str
     title: str
@@ -202,27 +203,10 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
         if parsed_amount.amount is not None:
             if parsed_amount.amount < 0:
                 codes.add(ReviewCode.NEGATIVE_AMOUNT)
-            # Greater than $300, positive only: a negative amount only ever
-            # gets NEGATIVE_AMOUNT.
-            if parsed_amount.amount > 300:
+            # Greater than $300, positive only, AUD only: a negative amount only
+            # ever gets NEGATIVE_AMOUNT.
+            if currency == AUD and parsed_amount.amount > 300:
                 codes.add(ReviewCode.AMOUNT_OVER_300)
-
-    gst_amount: Decimal | None = None
-    gst_field = context.gst_field
-    if gst_field is not None:
-        if document.has_field(gst_field.id):
-            parsed_gst = parse_amount(
-                _amount_raw(document.field_value(gst_field.id)),
-                default_currency=gst_field.default_currency() or settings.default_currency,
-            )
-            gst_amount = parsed_gst.amount
-        # GST is informational only: a blank value produces a note, never a code.
-
-    work_use_pct: float | None = None
-    work_use_field = context.work_use_field
-    if work_use_field is not None and document.has_field(work_use_field.id):
-        work_use_pct = _float_value(document.field_value(work_use_field.id))
-    # Work-use is informational only: a blank value produces neither a note nor a code.
 
     document_type = (
         context.document_types.get(document.document_type, "")
@@ -238,8 +222,9 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
         notes.append("amount missing")
     if date_field is not None and date_from_created:
         notes.append("date from created")
-    if gst_field is not None and gst_amount is None:
-        notes.append("GST value not recorded")
+    if amount is not None and currency is not None and currency != AUD:
+        notes.append(f"foreign currency {currency}; amount not converted to {AUD}")
+        notes.append(f"over-300 check not applied to {currency}")
 
     raw_amount = _raw_cell_value(document, amount_field)
     raw_date = _raw_cell_value(document, date_field)
@@ -249,9 +234,8 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
         supplier_name=supplier_name,
         description=document.title,
         amount_inc_gst=amount,
-        gst_amount=gst_amount,
+        currency="" if amount is None or currency is None else currency,
         document_type=document_type,
-        work_use_pct=work_use_pct,
         document_modified=document.modified[:10],  # ISO 8601 like `created`
         notes_for_agent="; ".join(notes),
         title=document.title,
@@ -280,21 +264,6 @@ def _amount_raw(value: CustomFieldValueType) -> str | int | None:
         # Parsing happens on strings; a float from Paperless keeps its repr so
         # the parse is still strict (e.g. 12.34 -> "12.34", 1e+20 unparseable).
         return str(value)
-    return None
-
-
-def _float_value(value: CustomFieldValueType) -> float | None:
-    """The deterministic float of a work-use value, or ``None``."""
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        stripped = value.strip()
-        try:
-            return float(stripped)
-        except ValueError:
-            return None
     return None
 
 

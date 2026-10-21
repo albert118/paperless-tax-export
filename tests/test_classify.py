@@ -84,8 +84,6 @@ def make_context(
     return ClassifyContext(
         settings=active,
         amount_field=resolve(active.field_amount),
-        gst_field=resolve(active.field_gst),
-        work_use_field=resolve(active.field_work_use),
         date_field=resolve(active.field_date),
         supplier_field=resolve(active.field_supplier),
         correspondents=dict(correspondents or {}),
@@ -353,15 +351,55 @@ def test_amount_at_or_under_300_has_no_amount_code(entry: str) -> None:
     assert row.reason_codes == ()
 
 
-def test_amount_foreign_currency_keeps_amount_and_codes() -> None:
+def test_foreign_currency_amount_is_accepted_with_currency_and_note() -> None:
     context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
     classification, row = classify_one(
         healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": "USD5.00"}]), context
     )
     assert row.amount_inc_gst == Decimal("5.00")
+    assert row.currency == "USD"
     assert row.raw_amount == "USD5.00"
-    assert row.reason_codes == (ReviewCode.FOREIGN_CURRENCY,)
-    assert row in classification.review
+    assert row.reason_codes == ()
+    assert row.notes_for_agent.endswith(
+        "foreign currency USD; amount not converted to AUD; over-300 check not applied to USD"
+    )
+    assert row in classification.accepted
+
+
+def test_amount_over_300_is_not_applied_to_a_foreign_currency() -> None:
+    context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
+    classification, row = classify_one(
+        healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": "USD350.00"}]), context
+    )
+    assert row.reason_codes == ()
+    assert "over-300 check not applied to USD" in row.notes_for_agent
+    assert row in classification.accepted
+
+
+def test_negative_foreign_currency_amount_still_gets_negative_amount() -> None:
+    context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
+    _, row = classify_one(
+        healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": "USD-5.00"}]), context
+    )
+    assert row.reason_codes == (ReviewCode.NEGATIVE_AMOUNT,)
+
+
+def test_aud_amount_has_currency_aud_and_no_foreign_note() -> None:
+    context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
+    _, row = classify_one(healthy_doc(1), context)
+    assert row.currency == "AUD"
+    assert "foreign" not in row.notes_for_agent
+    assert "over-300" not in row.notes_for_agent
+
+
+def test_currency_is_blank_when_the_amount_is_missing_or_unparseable() -> None:
+    context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
+    _, missing = classify_one(healthy_doc(1, custom_fields=[]), context)
+    _, garbage = classify_one(
+        healthy_doc(2, custom_fields=[{"field": F_AMOUNT.id, "value": "12 34"}]), context
+    )
+    assert missing.currency == ""
+    assert garbage.currency == ""
 
 
 def test_amount_default_currency_comes_from_the_field_definition() -> None:
@@ -379,8 +417,9 @@ def test_amount_default_currency_comes_from_the_field_definition() -> None:
         healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": "10.00"}]), context
     )
     assert row.amount_inc_gst == Decimal("10.00")
-    assert row.reason_codes == (ReviewCode.FOREIGN_CURRENCY,)
-    assert row in classification.review
+    assert row.currency == "USD"
+    assert row.reason_codes == ()
+    assert row in classification.accepted
 
 
 def test_amount_int_value_parses() -> None:
@@ -659,7 +698,7 @@ def test_notes_cover_only_document_level_informational_gaps() -> None:
     _, row = classify_one(
         healthy_doc(1, custom_fields=[{"field": F_DATE.id, "value": None}]), context
     )
-    assert row.notes_for_agent == "amount missing; date from created; GST value not recorded"
+    assert row.notes_for_agent == "amount missing; date from created"
 
 
 def test_notes_are_empty_when_there_are_no_gaps() -> None:
@@ -677,63 +716,45 @@ def test_amount_note_only_when_the_amount_cell_is_blank() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Work use and GST (informational columns)
+# GST and work-use values are not part of the output
 # --------------------------------------------------------------------------- #
 
 
-def test_work_use_value_is_carried_as_float() -> None:
+def test_absent_gst_and_work_use_entries_add_no_note_or_code() -> None:
     context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
-    _, row = classify_one(
+    classification, row = classify_one(
         healthy_doc(
             1,
             custom_fields=[
                 {"field": F_AMOUNT.id, "value": "100.00"},
-                {"field": F_WORK_USE.id, "value": 100.0},
+                {"field": F_DATE.id, "value": "2025-11-05"},
+                {"field": F_SUPPLIER.id, "value": "Acme Pty Ltd"},
             ],
         ),
         context,
     )
-    assert row.work_use_pct == 100.0
-    assert row.gst_amount is None  # GST entry absent -> blank and noted
-
-
-def test_work_use_none_setting_leaves_column_blank_without_code() -> None:
-    context = make_context(
-        settings_for(work_use=None), correspondents={CORRESPONDENT_ID: SUPPLIER_NAME}
-    )
-    classification, row = classify_one(
-        healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": "100.00"}]), context
-    )
-    assert row.work_use_pct is None
-    assert "work-use" not in row.notes_for_agent
+    assert row.notes_for_agent == ""
     assert row.reason_codes == ()
     assert row in classification.accepted
 
 
-def test_blank_work_use_stays_blank_without_note_or_code() -> None:
+def test_gst_and_work_use_values_do_not_change_the_row() -> None:
     context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
-    classification, row = classify_one(
-        healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": "100.00"}]), context
+    _, plain = classify_one(
+        healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": "110.00"}]), context
     )
-    assert row.work_use_pct is None
-    assert "work-use" not in row.notes_for_agent
-    assert row.reason_codes == ()
-    assert row in classification.accepted
-
-
-def test_gst_value_is_parsed_when_present() -> None:
-    context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
-    _, row = classify_one(
+    _, with_values = classify_one(
         healthy_doc(
             1,
             custom_fields=[
                 {"field": F_AMOUNT.id, "value": "110.00"},
                 {"field": F_GST.id, "value": "10.00"},
+                {"field": F_WORK_USE.id, "value": 50.0},
             ],
         ),
         context,
     )
-    assert row.gst_amount == Decimal("10.00")
+    assert with_values == plain
 
 
 # --------------------------------------------------------------------------- #

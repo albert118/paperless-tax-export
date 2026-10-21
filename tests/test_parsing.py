@@ -48,18 +48,18 @@ def test_parse_amount_rejects_currency_symbol() -> None:
     assert parsed.code == ReviewCode.AMOUNT_UNPARSEABLE
 
 
-def test_parse_amount_flags_foreign_currency_but_keeps_the_amount() -> None:
+def test_parse_amount_keeps_a_foreign_amount_and_currency_without_a_code() -> None:
     parsed = parse_amount("USD5.00", default_currency=None)
     assert parsed.amount == Decimal("5.00")
     assert parsed.currency == "USD"
-    assert parsed.code == ReviewCode.FOREIGN_CURRENCY
+    assert parsed.code is None
 
 
 def test_parse_amount_uses_default_currency_when_no_prefix() -> None:
     parsed = parse_amount("5.00", default_currency="USD")
     assert parsed.amount == Decimal("5.00")
     assert parsed.currency == "USD"
-    assert parsed.code == ReviewCode.FOREIGN_CURRENCY
+    assert parsed.code is None
 
 
 def test_parse_amount_accepts_thousands_separators() -> None:
@@ -89,7 +89,7 @@ def test_parse_amount_int_uses_default_currency() -> None:
     parsed = parse_amount(3, default_currency="USD")
     assert parsed.amount == Decimal(3)
     assert parsed.currency == "USD"
-    assert parsed.code == ReviewCode.FOREIGN_CURRENCY
+    assert parsed.code is None
 
 
 def test_parse_amount_never_converts_a_failure_to_zero() -> None:

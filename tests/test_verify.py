@@ -24,12 +24,12 @@ from paperless_tax_export.verify import (
 
 BOM = b"\xef\xbb\xbf"
 HEADER = b"id,title\r\n"
-CSV_FILES = ("deductions.csv", "review.csv", "ibkr-documents.csv")
+CSV_FILES = ("deductions.csv", "review.csv", "investments.csv")
 
 
 @pytest.fixture
 def output(tmp_path: Path) -> Path:
-    """A real ``run_export`` output directory: 1 accepted, 1 review, 1 IBKR row."""
+    """A real ``run_export`` output directory: 1 accepted, 1 review, 1 investments row."""
     directory = tmp_path / "out"
     run_export(Settings(), make_client(make_handler()), output=directory)
     return directory
@@ -69,14 +69,14 @@ def _craft_directory(directory: Path, files: dict[str, bytes], counts: dict[str,
     _write_manifest(directory, {"counts": counts, "outputs": outputs})
 
 
-def _counts(accepted: int, review: int, ibkr: int) -> dict[str, int]:
+def _counts(accepted: int, review: int, investments: int) -> dict[str, int]:
     return {
         "tagged_total": accepted + review,
         "out_of_fy": 0,
         "selected_in_fy": accepted + review,
         "accepted": accepted,
         "review": review,
-        "ibkr_count": ibkr,
+        "investments_count": investments,
     }
 
 
@@ -173,7 +173,7 @@ def test_row_count_differing_from_the_manifest_is_a_row_mismatch(
 def test_hash_and_rows_both_differing_are_both_named(
     output: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    (output / "ibkr-documents.csv").write_bytes(BOM + HEADER)
+    (output / "investments.csv").write_bytes(BOM + HEADER)
     code, out, _ = _verify(output, capsys)
     assert code == 4
     assert "(differs: sha256, rows)" in out
@@ -193,7 +193,7 @@ def test_counts_disagreeing_with_the_files_fail_each_check(
     output: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     def edit(payload: dict[str, Any]) -> None:
-        payload["counts"].update(accepted=0, review=2, ibkr_count=3)
+        payload["counts"].update(accepted=0, review=2, investments_count=3)
 
     _edit_manifest(output, edit)
     code, out, _ = _verify(output, capsys)
@@ -202,7 +202,7 @@ def test_counts_disagreeing_with_the_files_fail_each_check(
     assert failures == [
         "CHECK FAILED counts.accepted: manifest says 0, deductions.csv has 1 data rows",
         "CHECK FAILED counts.review: manifest says 2, review.csv has 1 data rows",
-        "CHECK FAILED counts.ibkr_count: manifest says 3, ibkr-documents.csv has 1 data rows",
+        "CHECK FAILED counts.investments_count: manifest says 3, investments.csv has 1 data rows",
     ]
 
 
@@ -300,8 +300,8 @@ def _set(path: tuple[str, ...], value: object) -> Any:
         (_drop(("counts", "accepted")), "'counts.accepted' must be a non-negative integer"),
         (_set(("counts", "review"), "1"), "'counts.review' must be a non-negative integer"),
         (
-            _set(("counts", "ibkr_count"), True),
-            "'counts.ibkr_count' must be a non-negative integer",
+            _set(("counts", "investments_count"), True),
+            "'counts.investments_count' must be a non-negative integer",
         ),
         (_set(("counts", "selected_in_fy"), -1), "'counts.selected_in_fy' must be a non-negative"),
         (_set(("outputs", "review.csv", "rows"), "1"), "'outputs.review.csv.rows' must be"),
@@ -321,6 +321,34 @@ def test_wrong_manifest_shape_is_a_usage_error(
     assert code == 2
     assert out == ""
     assert message in err
+
+
+def test_manifest_from_0_2_x_is_a_usage_error_naming_the_missing_file(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def to_0_2_x(payload: dict[str, Any]) -> None:
+        payload["outputs"]["ibkr-documents.csv"] = payload["outputs"].pop("investments.csv")
+        payload["counts"]["ibkr_count"] = payload["counts"].pop("investments_count")
+
+    _edit_manifest(output, to_0_2_x)
+    code, out, err = _verify(output, capsys)
+    assert code == 2
+    assert out == ""
+    assert "'outputs' does not list investments.csv" in err
+    assert "Traceback" not in err
+
+
+def test_manifest_with_the_old_count_key_is_a_usage_error_naming_the_new_key(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def rename_count(payload: dict[str, Any]) -> None:
+        payload["counts"]["ibkr_count"] = payload["counts"].pop("investments_count")
+
+    _edit_manifest(output, rename_count)
+    code, out, err = _verify(output, capsys)
+    assert code == 2
+    assert out == ""
+    assert "'counts.investments_count' must be a non-negative integer" in err
 
 
 @pytest.mark.parametrize(
@@ -436,9 +464,9 @@ def test_multi_line_cell_directory_verifies_with_the_csv_row_count(
         {
             "deductions.csv": deductions,
             "review.csv": BOM + HEADER,
-            "ibkr-documents.csv": BOM + HEADER,
+            "investments.csv": BOM + HEADER,
         },
-        _counts(accepted=1, review=0, ibkr=0),
+        _counts(accepted=1, review=0, investments=0),
     )
     code, out, _ = _verify(directory, capsys)
     assert code == 0
@@ -475,7 +503,7 @@ def test_check_file_ok_when_hash_and_rows_match() -> None:
 
 def test_check_consistency_skips_files_without_a_measured_row_count() -> None:
     counts = ManifestCounts(
-        tagged_total=2, out_of_fy=0, selected_in_fy=2, accepted=1, review=1, ibkr_count=0
+        tagged_total=2, out_of_fy=0, selected_in_fy=2, accepted=1, review=1, investments_count=0
     )
     assert check_consistency(counts, {}) == ()
     assert check_consistency(counts, {"deductions.csv": 1, "review.csv": 1}) == ()

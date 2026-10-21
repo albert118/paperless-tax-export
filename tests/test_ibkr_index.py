@@ -1,4 +1,4 @@
-"""Tests for the IBKR documents index: client filter, selection, CSV and run layer."""
+"""Tests for the investments file: IBKR correspondent selection, client filter, CSV, run layer."""
 
 from __future__ import annotations
 
@@ -21,7 +21,11 @@ from conftest import (
 
 from paperless_tax_export.cli import main
 from paperless_tax_export.client import PaperlessClient
-from paperless_tax_export.csv_output import IBKR_COLUMNS, IbkrRow, write_ibkr_csv
+from paperless_tax_export.csv_output import (
+    INVESTMENTS_COLUMNS,
+    InvestmentRow,
+    write_investments_csv,
+)
 from paperless_tax_export.errors import StartupError
 from paperless_tax_export.export import run_export
 from paperless_tax_export.parsing import ReviewCode
@@ -270,8 +274,8 @@ def test_run_exits_4_and_writes_nothing_when_the_server_ignores_the_corresponden
 # --- CSV --------------------------------------------------------------------
 
 
-def test_ibkr_header_has_no_tags_column() -> None:
-    assert IBKR_COLUMNS == (
+def test_investments_header_has_no_tags_column() -> None:
+    assert INVESTMENTS_COLUMNS == (
         "paperless_document_id",
         "title",
         "created",
@@ -280,21 +284,21 @@ def test_ibkr_header_has_no_tags_column() -> None:
     )
 
 
-def test_ibkr_csv_with_no_rows_is_header_only(tmp_path: Path) -> None:
-    path = tmp_path / "ibkr-documents.csv"
-    write_ibkr_csv(path, rows=[])
+def test_investments_csv_with_no_rows_is_header_only(tmp_path: Path) -> None:
+    path = tmp_path / "investments.csv"
+    write_investments_csv(path, rows=[])
     assert path.read_bytes() == b"\xef\xbb\xbf" + HEADER.encode("utf-8")
-    assert tuple(HEADER.strip().split(",")) == IBKR_COLUMNS
+    assert tuple(HEADER.strip().split(",")) == INVESTMENTS_COLUMNS
 
 
-def test_ibkr_csv_sorts_rows_and_guards_text(tmp_path: Path) -> None:
-    path = tmp_path / "ibkr-documents.csv"
+def test_investments_csv_sorts_rows_and_guards_text(tmp_path: Path) -> None:
+    path = tmp_path / "investments.csv"
     rows = [
-        IbkrRow(2, "=HYPERLINK(1)", "2025-10-01", "Statement", "Interactive Brokers"),
-        IbkrRow(1, "Plain", "2025-10-01", None, None),
-        IbkrRow(3, "Earlier", "2025-08-01", "Statement", "Interactive Brokers"),
+        InvestmentRow(2, "=HYPERLINK(1)", "2025-10-01", "Statement", "Interactive Brokers"),
+        InvestmentRow(1, "Plain", "2025-10-01", None, None),
+        InvestmentRow(3, "Earlier", "2025-08-01", "Statement", "Interactive Brokers"),
     ]
-    write_ibkr_csv(path, rows=rows)
+    write_investments_csv(path, rows=rows)
     data = path.read_bytes()
     assert data.startswith(b"\xef\xbb\xbf")
     assert b"\n" not in data.replace(b"\r\n", b"")
@@ -309,7 +313,7 @@ def test_ibkr_csv_sorts_rows_and_guards_text(tmp_path: Path) -> None:
 # --- run layer --------------------------------------------------------------
 
 
-def test_run_export_writes_the_ibkr_index(tmp_path: Path) -> None:
+def test_run_export_writes_the_investments_file(tmp_path: Path) -> None:
     documents = [
         ibkr_document(2, created="2026-01-02", tags=[7]),
         ibkr_document(1, created="2025-09-01", tags=[]),
@@ -320,9 +324,9 @@ def test_run_export_writes_the_ibkr_index(tmp_path: Path) -> None:
         make_handler(correspondents=ibkr_correspondents(), documents=documents, tags=tags)
     )
     result = run_export(Settings(), client, output=tmp_path)
-    assert result.ibkr_count == 2
+    assert result.investments_count == 2
     assert result.warnings == ()
-    assert read_text(tmp_path / "ibkr-documents.csv") == (
+    assert read_text(tmp_path / "investments.csv") == (
         HEADER
         + "1,Statement,2025-09-01,Statement,Interactive Brokers\r\n"
         + "2,Statement,2026-01-02,Statement,Interactive Brokers\r\n"
@@ -343,7 +347,7 @@ def test_document_with_both_signals_is_in_both_outputs_with_one_warning(tmp_path
     )
     assert (result.selected_count, result.accepted_count, result.review_count) == (1, 1, 0)
     assert "4,2025-10-01" in read_text(tmp_path / "deductions.csv")
-    assert "4,Statement,2025-10-01" in read_text(tmp_path / "ibkr-documents.csv")
+    assert "4,Statement,2025-10-01" in read_text(tmp_path / "investments.csv")
     assert ReviewCode.__members__.get("BOTH_DEDUCTIBLE_AND_IBKR") is None
     assert "BOTH_DEDUCTIBLE_AND_IBKR" not in read_text(tmp_path / "review.csv")
 
@@ -356,20 +360,20 @@ def test_missing_correspondent_warns_and_writes_a_header_only_index(tmp_path: Pa
         )
     )
     result = run_export(Settings(), client, output=tmp_path)
-    assert result.ibkr_count == 0
+    assert result.investments_count == 0
     assert len(result.warnings) == 1
     assert "'Interactive Brokers'" in result.warnings[0]
-    assert (tmp_path / "ibkr-documents.csv").read_bytes() == b"\xef\xbb\xbf" + HEADER.encode()
+    assert (tmp_path / "investments.csv").read_bytes() == b"\xef\xbb\xbf" + HEADER.encode()
 
 
 def test_ibkr_correspondent_name_comes_from_settings(tmp_path: Path) -> None:
     correspondents = [correspondent_payload(IBKR_ID, "IB Australia")]
     client = make_client(make_handler(correspondents=correspondents, documents=[ibkr_document(1)]))
     result = run_export(Settings(ibkr_correspondent="IB Australia"), client, output=tmp_path)
-    assert result.ibkr_count == 1
+    assert result.investments_count == 1
 
 
-def test_identical_data_gives_byte_identical_ibkr_index(tmp_path: Path) -> None:
+def test_identical_data_gives_byte_identical_investments_file(tmp_path: Path) -> None:
     documents = [ibkr_document(2, tags=[1]), ibkr_document(1, created="2025-08-01")]
 
     def run(output: Path) -> bytes:
@@ -377,7 +381,7 @@ def test_identical_data_gives_byte_identical_ibkr_index(tmp_path: Path) -> None:
             make_handler(correspondents=ibkr_correspondents(), documents=documents)
         )
         run_export(Settings(), client, output=output)
-        return (output / "ibkr-documents.csv").read_bytes()
+        return (output / "investments.csv").read_bytes()
 
     assert run(tmp_path / "first") == run(tmp_path / "second")
 
@@ -417,5 +421,5 @@ def test_cli_missing_correspondent_prints_one_warning_and_exits_zero(
     assert code == 0
     assert captured.err.count("warning:") == 1
     assert "'Interactive Brokers'" in captured.err
-    assert "ibkr-documents.csv written to" in captured.out
-    assert (output / "ibkr-documents.csv").read_bytes() == b"\xef\xbb\xbf" + HEADER.encode()
+    assert "investments.csv written to" in captured.out
+    assert (output / "investments.csv").read_bytes() == b"\xef\xbb\xbf" + HEADER.encode()
