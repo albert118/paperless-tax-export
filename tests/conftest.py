@@ -37,6 +37,22 @@ def paperless_filter_matches(document: dict[str, object], params: httpx.QueryPar
     return not ("tags__id__all" in params and int(params["tags__id__all"]) not in tag_ids)
 
 
+def filtered_documents_response(
+    request: httpx.Request, documents: list[dict[str, object]]
+) -> httpx.Response:
+    """Serve ``/api/documents/`` like Paperless: filter strictly, and answer the count probe.
+
+    The one-row ``fields=id`` probe the client uses for counting reports the filtered total.
+    """
+    params = request.url.params
+    found = [document for document in documents if paperless_filter_matches(document, params)]
+    if params.get("page_size") == "1" and params.get("fields") == "id":
+        return json_response(
+            page_payload([{"id": document["id"]} for document in found[:1]], count=len(found))
+        )
+    return json_response(page_payload(found))
+
+
 def make_client(
     handler: Callable[[httpx.Request], httpx.Response],
     *,
