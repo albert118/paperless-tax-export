@@ -362,6 +362,10 @@ def test_manifest_with_the_old_count_key_is_a_usage_error_naming_the_new_key(
         "dir/x.csv",
         r"dir\x.csv",
         "x.csv:stream",
+        "review.csv.",
+        "review.csv..",
+        "review.csv ",
+        " review.csv",
     ],
 )
 def test_unsafe_listed_names_are_a_usage_error(
@@ -383,6 +387,31 @@ def test_device_name_listed_in_the_manifest_never_reads_as_ok(
     code, out, _ = _verify(output, capsys)
     assert code == 4
     assert "OK NUL" not in out
+
+
+@pytest.mark.parametrize("name", ["CON", "PRN", "AUX", "NUL", "COM1", "LPT1", "NUL.txt"])
+def test_reserved_device_names_never_read_as_ok(
+    name: str, output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    empty = hashlib.sha256(b"").hexdigest()
+    _edit_manifest(output, _set(("outputs", name), {"sha256": empty, "rows": 0}))
+    code, out, _ = _verify(output, capsys)
+    assert code != 0
+    assert f"OK {name}" not in out
+
+
+def test_dangling_symlink_listed_as_a_csv_is_unreadable_not_a_traceback(
+    output: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (output / "review.csv").unlink()
+    try:
+        (output / "review.csv").symlink_to(tmp_path / "does-not-exist.csv")
+    except OSError, NotImplementedError:
+        pytest.skip("this OS refuses to create symlinks without privileges")
+    code, out, err = _verify(output, capsys)
+    assert code == 4
+    assert "UNREADABLE review.csv" in out
+    assert "Traceback" not in out + err
 
 
 def test_directory_named_like_a_csv_is_unreadable_not_ok(
