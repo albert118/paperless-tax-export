@@ -82,6 +82,8 @@ release. Do not disable or weaken those checks to get a change through.
   `run`). The live row-date field is `Transaction Date`. Never read `actual_*` fields.
 - Foreign-currency amounts are accepted unconverted, with a `currency` column and a note;
   `AMOUNT_OVER_300` applies to AUD only.
+- A zero amount in any currency gets the blocking `ZERO_AMOUNT` code and goes to
+  `review.csv`, never `deductions.csv`.
 - Every document selected goes to `deductions.csv` or `review.csv`; tagged documents
   outside the FY are only counted in the manifest.
 - IBKR selection is correspondent-only: correspondent "Interactive Brokers". The
