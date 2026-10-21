@@ -24,6 +24,8 @@ from created" and, for a non-AUD amount, "foreign currency <CODE>; amount not
 converted to AUD" followed by "over-300 check not applied to <CODE>", in that
 fixed order, joined with ``"; "``. A foreign-currency amount is accepted as it is
 and never gets a review code of its own; ``AMOUNT_OVER_300`` applies to AUD only.
+A zero amount (any currency, including ``-0.00``) gets ``ZERO_AMOUNT`` and goes to
+review.
 """
 
 from __future__ import annotations
@@ -203,8 +205,11 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
         if parsed_amount.amount is not None:
             if parsed_amount.amount < 0:
                 codes.add(ReviewCode.NEGATIVE_AMOUNT)
-            # Greater than $300, positive only, AUD only: a negative amount only
-            # ever gets NEGATIVE_AMOUNT.
+            # A zero amount is a missing value or a placeholder, in any currency.
+            if parsed_amount.amount == 0:
+                codes.add(ReviewCode.ZERO_AMOUNT)
+            # Greater than $300, positive only, AUD only: a negative or zero
+            # amount never gets AMOUNT_OVER_300.
             if currency == AUD and parsed_amount.amount > 300:
                 codes.add(ReviewCode.AMOUNT_OVER_300)
 
