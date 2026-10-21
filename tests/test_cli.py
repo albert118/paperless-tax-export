@@ -23,6 +23,8 @@ from conftest import (
 from paperless_tax_export import __version__
 from paperless_tax_export.cli import main
 from paperless_tax_export.client import PaperlessClient
+from paperless_tax_export.export import ExportResult, run_export
+from paperless_tax_export.settings import Settings
 
 
 def _write_token(tmp_path: Path, content: str = "test-token") -> Path:
@@ -318,6 +320,38 @@ def test_bad_run_flag_is_a_usage_error() -> None:
     with pytest.raises(SystemExit) as exc_info:
         main(["run", "--not-a-real-flag"])
     assert exc_info.value.code == 2
+
+
+def test_run_help_documents_the_asset_reviewed_tag_flag(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["run", "--help"])
+    assert exc_info.value.code == 0
+    out = capsys.readouterr().out
+    assert "--asset-reviewed-tag" in out
+    assert "AMOUNT_OVER_300" in out
+    assert "asset-reviewed" in out
+
+
+def test_run_passes_the_asset_reviewed_tag_flag_to_the_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    token_file = _write_token(tmp_path)
+    _install_mock_client(monkeypatch, _run_handler())
+    seen: list[str | None] = []
+    real_run_export = run_export
+
+    def spy(settings: Settings, client: PaperlessClient, **kwargs: object) -> ExportResult:
+        seen.append(settings.asset_reviewed_tag)
+        return real_run_export(settings, client, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr("paperless_tax_export.cli.run_export", spy)
+    base = ["run", "--token-file", str(token_file)]
+    assert main([*base, "--output", str(tmp_path / "a")]) == 0
+    assert main([*base, "--asset-reviewed-tag", "assets ok", "--output", str(tmp_path / "b")]) == 0
+    assert seen == ["asset-reviewed", "assets ok"]
 
 
 def test_run_success_writes_csvs_and_prints_the_summary(
