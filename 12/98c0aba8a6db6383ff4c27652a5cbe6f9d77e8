@@ -1,0 +1,57 @@
+AGENTS.md
+  s_b0836905a23abc::t_25a92dc1d1d499 77-79
+  s_b0836905a23abc::t_da3be88fd39a1f 28-29
+tests/test_ibkr_index.py
+  s_b0836905a23abc::t_0b469b7783a035 1-81,87-93,95-332
+  s_b0836905a23abc::t_b3902fe00cd381 82-86,94
+  s_b0836905a23abc::t_3330ead2c8e129 333-335
+  s_a96f6480598bca::t_08af91549e426b 336-338
+README.md
+  s_b0836905a23abc::t_3e80870aa6c708 18
+  s_b0836905a23abc::t_d2e7d0b305cee3 9-10
+src/paperless_tax_export/export.py
+  s_b0836905a23abc::t_25c87202e7c3e7 12,18-24,26-32
+  s_b0836905a23abc::t_6ee8893fa90a49 38-42,47,49
+  s_b0836905a23abc::t_f132c108becc03 1,4-7
+  s_b0836905a23abc::t_bf4109d7c3587f 119-124,131,137,139-173
+src/paperless_tax_export/cli.py
+  s_b0836905a23abc::t_86ba394e1ab79b 122-123
+  s_b0836905a23abc::t_bf0f97bed77d5b 157-160
+  s_b0836905a23abc::t_e5747ff157025b 255-256
+  s_b0836905a23abc::t_34d46cb3f08c4b 263-266
+  s_b0836905a23abc::t_6b1ac26a04e24d 197
+  s_b0836905a23abc::t_8f8607f8c41234 156
+src/paperless_tax_export/csv_output.py
+  s_b0836905a23abc::t_854a025cdd6909 136
+  s_b0836905a23abc::t_296e27423d5c71 133-135
+  s_b0836905a23abc::t_00ae03b629b15d 137-139
+  s_a96f6480598bca::t_844b319ef643bb 20,56-64,110-132,140-149
+src/paperless_tax_export/client.py
+  s_a96f6480598bca::t_7b35bfb20a717d 120-121,125-132,137-140
+src/paperless_tax_export/selection.py
+  s_a96f6480598bca::t_3388405641f14e 90-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1298c0aba8a6db6383ff4c27652a5cbe6f9d77e8",
+  "prompts": {},
+  "sessions": {
+    "s_a96f6480598bca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ae9cd5e8746c462d3",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
