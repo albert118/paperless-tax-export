@@ -1,0 +1,24 @@
+src/paperless_tax_export/env_config.py
+  s_b0836905a23abc::t_108a4960feef68 77,81-84,88-97
+  s_b0836905a23abc::t_a2335a1bdd1f39 98-99
+README.md
+  s_b0836905a23abc::t_b97a5c789b140d 125-131
+tests/test_env_config.py
+  s_b0836905a23abc::t_335a146b469faa 298-324
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb43c58ed1ff9d88ac525311d49318b7ab0ce0ee",
+  "prompts": {},
+  "sessions": {
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
