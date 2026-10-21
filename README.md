@@ -53,7 +53,9 @@ failing:
 - every custom field in the instance, with type, options and document count;
 - per-field value coverage over the FY deduction documents (present / null / absent);
 - storage paths (informational — selection is `created`-only);
-- `archived_file_name` path segments under the FY deduction documents (console only);
+- `archived_file_name` path segments under the FY deduction documents (console only), with
+  how many documents have and lack an archived version (those two counts also go to
+  `audit.json`);
 - IBKR identifiers: whether `--ibkr-correspondent` (`Interactive Brokers`) exists, which
   document types match `trade confirmation` / `realized gains summary`, and near-misses;
   IBKR selection is correspondent-only;

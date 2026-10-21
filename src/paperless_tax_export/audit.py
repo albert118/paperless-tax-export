@@ -23,9 +23,9 @@ Sanitisation (structural, not a scrub)
 holds aggregates only: no per-document title, document id, date, custom-field
 value, ``archived_file_name`` string or monetary value may enter the report.
 The one document-derived aggregate is the ``archived_file_name`` first/second
-path-segment count summary, which ``dump_json`` never emits; those segment
-strings are rendered only by ``render()`` for the owner's console; only the
-integer counts of documents with and without an archived version are emitted. The base
+path-segment count summary. Those segment strings are rendered only by
+``render()`` for the owner's console; ``dump_json`` emits only the integer counts
+of documents with and without an archived version. The base
 URL, run timestamp, visibility counts, the ``unavailable`` endpoint list and
 the value-neutral ``notes`` observations (including the client's
 origin-rewrite records) are structural metadata and never carry the API token.
