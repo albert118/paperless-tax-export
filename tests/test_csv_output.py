@@ -14,7 +14,7 @@ from paperless_tax_export.csv_output import (
 )
 from paperless_tax_export.parsing import ReviewCode
 
-BOM = "﻿"
+BOM = "\N{ZERO WIDTH NO-BREAK SPACE}"  # U+FEFF, the UTF-8 byte order mark
 
 
 def make_row(
