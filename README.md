@@ -16,7 +16,7 @@ with the settings, and `run` classifies the FY documents and writes `deductions.
 | `review.csv` | Documents that need a human decision, with reason codes. The priority output. |
 | `deductions.csv` | Documents that pass every check. |
 | `ibkr-documents.csv` | Index of Interactive Brokers statements for the year (header only, plus a warning, when the correspondent is missing). A document that also carries the deduction tag appears here and in the deduction outputs, with a warning. |
-| `manifest.json` | Run parameters, Paperless version, counts and file hashes. |
+| `manifest.json` | Run parameters, tool and Paperless versions, counts, expected count, and SHA-256 and row count of each other output. No timestamp. |
 
 All files go into `output/`, which is never committed.
 
@@ -78,6 +78,22 @@ recorded fixture or share with someone else.
 The audit also reports how many tags, correspondents, document types and storage paths
 the token can see, lists any endpoint it could not read (console `Warnings` and the JSON
 `unavailable` list), and states the UTC timestamp and base URL the audit ran against.
+
+### Run the export
+
+```sh
+uv run paperless-tax-export run   --base-url https://paperless.example.com   --token-file secrets/paperless-token.txt   --expected-count 14   --dry-run
+```
+
+- `--expected-count N` is the number of documents the Paperless admin view shows for the
+  tag with the FY `created` filter applied. A different count exits 4, names both
+  numbers and writes nothing. It is a check against documents the token cannot see; it
+  does not cover documents outside the FY window.
+- `--dry-run` runs every guard and prints the counts and planned files without creating
+  the output directory or any file. Drop it for the real run.
+- Every guard (paging integrity, expected count, `accepted + review == selected`) runs
+  before any file is written. `manifest.json` is written last; its hashes are of the
+  exact bytes of the other files, and the same data gives a byte-identical manifest.
 
 ## The Paperless token
 

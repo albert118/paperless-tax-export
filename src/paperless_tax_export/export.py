@@ -4,7 +4,8 @@
 (startup resolution, the count guard and the IBKR selection) completes before
 anything touches disk: the output directory is only created once the
 classifications are proven complete, so a failing run leaves no partial files
-behind.
+behind. ``manifest.json`` is rendered from the bytes of the other outputs and
+written last. ``dry_run`` runs the same guards and rendering but writes nothing.
 """
 
 from __future__ import annotations
@@ -19,10 +20,11 @@ from paperless_tax_export.csv_output import (
     DEDUCTIONS_COLUMNS,
     REVIEW_COLUMNS,
     IbkrRow,
-    write_csv,
-    write_ibkr_csv,
+    render_csv_bytes,
+    render_ibkr_csv_bytes,
 )
 from paperless_tax_export.errors import CountGuardError
+from paperless_tax_export.manifest import ManifestCounts, PlannedFile, render_manifest
 from paperless_tax_export.models import Document
 from paperless_tax_export.selection import (
     resolve_fields,
@@ -35,10 +37,11 @@ from paperless_tax_export.settings import Settings
 
 @dataclass(frozen=True, slots=True)
 class ExportResult:
-    """Counts and warnings of one successful export run; the files already exist.
+    """Counts and warnings of one successful export run.
 
-    ``warnings`` are non-fatal findings in a fixed, deterministic order; the
-    CLI prints them once.
+    ``files`` lists every output, ``manifest.json`` last. They exist on disk
+    unless ``dry_run`` is true. ``warnings`` are non-fatal findings in a fixed,
+    deterministic order; the CLI prints them once.
     """
 
     selected_count: int
@@ -46,16 +49,33 @@ class ExportResult:
     review_count: int
     ibkr_count: int
     output_dir: Path
+    tagged_total: int = 0
+    out_of_fy_count: int = 0
+    files: tuple[PlannedFile, ...] = ()
+    dry_run: bool = False
     warnings: tuple[str, ...] = ()
 
 
-def run_export(settings: Settings, client: PaperlessClient, *, output: Path) -> ExportResult:
+def run_export(
+    settings: Settings,
+    client: PaperlessClient,
+    *,
+    output: Path,
+    dry_run: bool = False,
+) -> ExportResult:
     """Run one classification/export pass against the live Paperless instance.
 
     The deduction tag is resolved strictly (exactly one tag with that exact
     name), ``field_amount`` is a required custom field and every other
     configured field is optional (a missing one maps to ``None``). Context
     maps come from one fetch each of tags, correspondents and document types.
+
+    ``settings.expected_count``, when set, must equal the number of documents
+    selected for the FY. That number is the server-reported FY-scoped count:
+    the client's paging check has already proven the accumulated results equal
+    the ``count`` Paperless reported. A mismatch raises ``CountGuardError``
+    before anything is written. With ``dry_run`` every guard runs and the
+    result is returned, but the output directory is not created.
     """
     deduction_tag = resolve_tag(client, settings.deduction_tag)
 
@@ -106,6 +126,12 @@ def run_export(settings: Settings, client: PaperlessClient, *, output: Path) -> 
         fy_end=settings.fy_end,
     )
     documents = selection.documents
+    expected = settings.expected_count
+    if expected is not None and expected != len(documents):
+        raise CountGuardError(
+            f"expected {expected} documents in the financial year but Paperless "
+            f"reported {len(documents)} for tag {settings.deduction_tag!r}"
+        )
     classification = classify_documents(documents, context)
 
     selected = len(documents)
@@ -122,13 +148,35 @@ def run_export(settings: Settings, client: PaperlessClient, *, output: Path) -> 
     warnings = _ibkr_warnings(settings.ibkr_correspondent, ibkr_found, documents, ibkr_documents)
     ibkr_rows = tuple(_ibkr_row(document, context) for document in ibkr_documents)
 
-    # Every check has passed: only now render and write the files.
+    # Every check has passed: render every file in memory, manifest last.
     deductions_rows = tuple(classification.accepted)
     review_rows = tuple(classification.review)
-    output.mkdir(parents=True, exist_ok=True)
-    write_csv(output / "deductions.csv", rows=deductions_rows, columns=DEDUCTIONS_COLUMNS)
-    write_csv(output / "review.csv", rows=review_rows, columns=REVIEW_COLUMNS)
-    write_ibkr_csv(output / "ibkr-documents.csv", rows=ibkr_rows)
+    csv_files = (
+        PlannedFile(
+            "deductions.csv",
+            render_csv_bytes(deductions_rows, DEDUCTIONS_COLUMNS),
+            len(deductions_rows),
+        ),
+        PlannedFile("review.csv", render_csv_bytes(review_rows, REVIEW_COLUMNS), len(review_rows)),
+        PlannedFile("ibkr-documents.csv", render_ibkr_csv_bytes(ibkr_rows), len(ibkr_rows)),
+    )
+    manifest_bytes = render_manifest(
+        settings,
+        counts=ManifestCounts(
+            tagged_total=selection.total_tagged,
+            out_of_fy=selection.out_of_fy_count,
+            selected_in_fy=selected,
+            accepted=len(deductions_rows),
+            review=len(review_rows),
+            ibkr_count=len(ibkr_rows),
+        ),
+        files=csv_files,
+        server_version=client.server_version,
+        api_version=client.api_version,
+    )
+    manifest_file = PlannedFile("manifest.json", manifest_bytes, rows=0)
+    if not dry_run:
+        _write_files(output, csv_files, manifest_file)
 
     return ExportResult(
         selected_count=selected,
@@ -136,8 +184,27 @@ def run_export(settings: Settings, client: PaperlessClient, *, output: Path) -> 
         review_count=len(review_rows),
         ibkr_count=len(ibkr_rows),
         output_dir=output,
+        tagged_total=selection.total_tagged,
+        out_of_fy_count=selection.out_of_fy_count,
+        files=(*csv_files, manifest_file),
+        dry_run=dry_run,
         warnings=warnings,
     )
+
+
+def _write_files(
+    output: Path, csv_files: Sequence[PlannedFile], manifest_file: PlannedFile
+) -> None:
+    """Write the CSVs, then the manifest, so a failure never leaves a fresh manifest.
+
+    A manifest from an earlier run is removed first: it would otherwise sit
+    next to CSVs it no longer describes if a write fails part-way.
+    """
+    output.mkdir(parents=True, exist_ok=True)
+    (output / manifest_file.name).unlink(missing_ok=True)
+    for file in csv_files:
+        (output / file.name).write_bytes(file.content)
+    (output / manifest_file.name).write_bytes(manifest_file.content)
 
 
 def _ibkr_row(document: Document, context: ClassifyContext) -> IbkrRow:

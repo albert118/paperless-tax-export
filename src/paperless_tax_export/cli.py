@@ -162,7 +162,22 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output",
         type=Path,
         default=Path("output"),
-        help="directory the CSV files are written into (default: output/)",
+        help="directory the output files are written into (default: output/)",
+    )
+    run_parser.add_argument(
+        "--expected-count",
+        type=int,
+        default=settings.expected_count,
+        help=(
+            "number of documents the Paperless admin view shows for the tag with the"
+            " financial-year created filter applied; a different count exits non-zero"
+            " and writes nothing"
+        ),
+    )
+    run_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="run every guard and print the counts and planned files, but write nothing",
     )
     return parser
 
@@ -197,6 +212,7 @@ def _settings_from_run_args(args: argparse.Namespace) -> Settings:
         ibkr_correspondent=args.ibkr_correspondent,
         fy_start=args.fy_start,
         fy_end=args.fy_end,
+        expected_count=args.expected_count,
     )
 
 
@@ -249,7 +265,7 @@ def _run_export_command(settings: Settings, args: argparse.Namespace) -> int:
         page_size=settings.page_size,
         timeout=settings.timeout_seconds,
     ) as client:
-        result = run_export(settings, client, output=args.output)
+        result = run_export(settings, client, output=args.output, dry_run=args.dry_run)
     for note in unconfigured_field_notes(settings):
         print(f"note: {note}")
     for warning in result.warnings:
@@ -258,12 +274,15 @@ def _run_export_command(settings: Settings, args: argparse.Namespace) -> int:
         f"{result.accepted_count} accepted, {result.review_count} review "
         f"({result.selected_count} deduction documents)"
     )
-    print(f"deductions.csv written to {result.output_dir / 'deductions.csv'}")
-    print(f"review.csv written to {result.output_dir / 'review.csv'}")
     print(
-        f"ibkr-documents.csv written to {result.output_dir / 'ibkr-documents.csv'} "
-        f"({result.ibkr_count} documents)"
+        f"tagged {result.tagged_total}, out of FY {result.out_of_fy_count}, "
+        f"selected in FY {result.selected_count}, IBKR {result.ibkr_count}"
     )
+    verb = "would write" if result.dry_run else "written to"
+    for file in result.files:
+        print(f"{file.name} {verb} {result.output_dir / file.name}")
+    if result.dry_run:
+        print("dry run: nothing was written")
     return EXIT_OK
 
 
