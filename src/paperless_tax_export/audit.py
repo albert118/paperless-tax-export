@@ -23,8 +23,9 @@ Sanitisation (structural, not a scrub)
 holds aggregates only: no per-document title, document id, date, custom-field
 value, ``archived_file_name`` string or monetary value may enter the report.
 The one document-derived aggregate is the ``archived_file_name`` first/second
-path-segment count summary, which ``dump_json`` never emits; those segment
-strings are rendered only by ``render()`` for the owner's console. The base
+path-segment count summary. Those segment strings are rendered only by
+``render()`` for the owner's console; ``dump_json`` emits only the integer counts
+of documents with and without an archived version. The base
 URL, run timestamp, visibility counts, the ``unavailable`` endpoint list and
 the value-neutral ``notes`` observations (including the client's
 origin-rewrite records) are structural metadata and never carry the API token.
@@ -181,6 +182,8 @@ class AuditReport:
     unavailable: tuple[str, ...] = ()
     tag_candidates: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
+    archived_version_count: int = 0
+    no_archived_version_count: int = 0
 
 
 def run_audit(
@@ -259,7 +262,7 @@ def run_audit(
         )
     )
 
-    first_segments, second_segments = _archived_segments(documents)
+    archived = _archived_segments(documents)
 
     correspondents = _optional_read(client.list_correspondents, "correspondents", unavailable)
     document_types = _optional_read(client.list_document_types, "document_types", unavailable)
@@ -288,8 +291,10 @@ def run_audit(
         custom_fields=custom_fields,
         coverage=coverage,
         storage_paths=storage_paths,
-        archived_first_segments=first_segments,
-        archived_second_segments=second_segments,
+        archived_first_segments=archived.first,
+        archived_second_segments=archived.second,
+        archived_version_count=archived.counted,
+        no_archived_version_count=archived.none,
         ibkr=ibkr,
         tax_metadata_tag=tax_metadata,
         expected_fields=expected_fields,
@@ -399,21 +404,45 @@ def _coverage(field: CustomFieldDef, documents: Sequence[Document]) -> FieldCove
     )
 
 
-def _archived_segments(
-    documents: Sequence[Document],
-) -> tuple[tuple[SegmentCount, ...], tuple[SegmentCount, ...]]:
-    """Distinct first and second ``archived_file_name`` segments with counts."""
+@dataclass(frozen=True, slots=True)
+class ArchivedSegments:
+    """First/second ``archived_file_name`` segment counts plus their denominators.
+
+    ``counted + none`` always equals the number of documents examined.
+    """
+
+    first: tuple[SegmentCount, ...]
+    second: tuple[SegmentCount, ...]
+    counted: int
+    none: int
+
+
+def _archived_segments(documents: Sequence[Document]) -> ArchivedSegments:
+    """Distinct first and second ``archived_file_name`` segments with counts.
+
+    A document with a null or empty ``archived_file_name`` is tallied in ``none``
+    rather than skipped, so the counts always reconcile with the document total.
+    """
     first: dict[str, int] = {}
     second: dict[str, int] = {}
+    counted = 0
     for document in documents:
         archived = document.archived_file_name
         if not archived:
             continue
+        counted += 1
         parts = archived.split("/")
         first[parts[0]] = first.get(parts[0], 0) + 1
+        # Single-segment paths add to the first segment only, so the second-segment
+        # counts can sum to less than ``counted``.
         if len(parts) > 1:
             second[parts[1]] = second.get(parts[1], 0) + 1
-    return _segment_counts(first), _segment_counts(second)
+    return ArchivedSegments(
+        first=_segment_counts(first),
+        second=_segment_counts(second),
+        counted=counted,
+        none=len(documents) - counted,
+    )
 
 
 def _segment_counts(counter: dict[str, int]) -> tuple[SegmentCount, ...]:
@@ -591,15 +620,23 @@ def render(report: AuditReport) -> str:
     else:
         lines.append("  (none)")
 
-    if report.archived_first_segments or report.archived_second_segments:
+    if report.deduction_document_count:
         lines.append("")
         lines.append(
             "archived_file_name segments across the FY deduction documents (console only):"
         )
-        lines.append("  first segment:")
-        lines.extend(_segment_lines(report.archived_first_segments))
-        lines.append("  second segment:")
-        lines.extend(_segment_lines(report.archived_second_segments))
+        lines.append(
+            f"  {report.archived_version_count} with an archived version, "
+            f"{report.no_archived_version_count} with no archived version "
+            f"(of {report.deduction_document_count})"
+        )
+        if report.archived_version_count:
+            lines.append("  first segment:")
+            lines.extend(_segment_lines(report.archived_first_segments))
+            lines.append("  second segment:")
+            lines.extend(_segment_lines(report.archived_second_segments))
+        else:
+            lines.append("  no archived version: no segments to report")
 
     ibkr = report.ibkr
     lines.append("")
@@ -702,6 +739,8 @@ def dump_json(report: AuditReport) -> str:
         "fy_start": report.fy_start,
         "fy_end": report.fy_end,
         "deduction_document_count": report.deduction_document_count,
+        "archived_version_count": report.archived_version_count,
+        "no_archived_version_count": report.no_archived_version_count,
         "tag_matches": [
             {"name": match.name, "document_count": match.document_count}
             for match in report.tag_matches
