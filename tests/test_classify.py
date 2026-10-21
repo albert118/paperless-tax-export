@@ -342,13 +342,64 @@ def test_amount_over_300_positive_only() -> None:
     assert row.amount_inc_gst == Decimal("350.00")
 
 
-@pytest.mark.parametrize("entry", ["300.00", "0.00", "0", "150.25"])
+@pytest.mark.parametrize("entry", ["300.00", "0.01", "150.25"])
 def test_amount_at_or_under_300_has_no_amount_code(entry: str) -> None:
     context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
     _, row = classify_one(
         healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": entry}]), context
     )
     assert row.reason_codes == ()
+
+
+@pytest.mark.parametrize("entry", ["0", "0.00", "AUD0.00", "-0.00", "USD0"])
+def test_zero_amount_goes_to_review_with_only_zero_amount(entry: str) -> None:
+    context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
+    classification, row = classify_one(
+        healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": entry}]), context
+    )
+    assert row.amount_inc_gst == 0
+    assert row.reason_codes == (ReviewCode.ZERO_AMOUNT,)
+    assert row in classification.review
+    assert classification.accepted == ()
+
+
+def test_integer_zero_amount_gets_zero_amount() -> None:
+    context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
+    classification, row = classify_one(
+        healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": 0}]), context
+    )
+    assert row.reason_codes == (ReviewCode.ZERO_AMOUNT,)
+    assert row in classification.review
+
+
+def test_zero_amount_is_not_given_for_missing_or_unparseable_amounts() -> None:
+    context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
+    _, unparseable = classify_one(
+        healthy_doc(1, custom_fields=[{"field": F_AMOUNT.id, "value": "abc"}]), context
+    )
+    assert unparseable.reason_codes == (ReviewCode.AMOUNT_UNPARSEABLE,)
+    _, missing = classify_one(healthy_doc(2, custom_fields=[]), context)
+    assert missing.reason_codes == (ReviewCode.MISSING_AMOUNT,)
+
+
+def test_zero_amount_with_other_problems_carries_codes_in_declaration_order() -> None:
+    context = make_context(settings_for(supplier=None))
+    classification, _row = classify_one(
+        healthy_doc(
+            1,
+            correspondent=None,
+            custom_fields=[
+                {"field": F_AMOUNT.id, "value": "0.00"},
+                {"field": F_DATE.id, "value": "2025-06-30"},
+            ],
+        ),
+        context,
+    )
+    assert review_codes(classification) == (
+        ReviewCode.MISSING_SUPPLIER,
+        ReviewCode.ZERO_AMOUNT,
+        ReviewCode.DATE_OUT_OF_FY,
+    )
 
 
 def test_foreign_currency_amount_is_accepted_with_currency_and_note() -> None:

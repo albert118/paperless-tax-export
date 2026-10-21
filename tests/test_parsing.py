@@ -74,6 +74,12 @@ def test_parse_amount_rejects_garbage_and_bad_grouping() -> None:
         assert parsed.code == ReviewCode.AMOUNT_UNPARSEABLE
 
 
+def test_parse_amount_keeps_negative_zero_as_zero_without_a_code() -> None:
+    parsed = parse_amount("-0.00", default_currency=None)
+    assert parsed.amount == 0
+    assert parsed.code is None
+
+
 def test_parse_amount_accepts_zero() -> None:
     parsed = parse_amount("0.00", default_currency=None)
     assert parsed == ParsedAmount(Decimal("0.00"), "AUD", None)
