@@ -18,7 +18,7 @@ from test_manifest import _install, _run_cli, make_handler
 from paperless_tax_export.classify import ClassifiedRow
 from paperless_tax_export.cli import main
 from paperless_tax_export.env_config import EnvSources, resolve_marginal_rate
-from paperless_tax_export.errors import SettingsError
+from paperless_tax_export.errors import EstimateError, SettingsError
 from paperless_tax_export.estimate import (
     ESTIMATE_COLUMNS,
     Estimate,
@@ -119,7 +119,8 @@ def test_totals_mix_aud_converted_foreign_and_unconverted_currencies() -> None:
         "",
         "",
         "14.00",
-        "excluded, no rate: JPY 1",
+        "upper bound: includes suspected duplicates and items that may never be deductions"
+        "; excluded, no rate: JPY 1",
     )
     assert table[("pending_no_amount", "review rows without an amount")] == (
         "1",
@@ -399,7 +400,10 @@ def test_valid_marginal_rates(text: str, expected: Decimal) -> None:
     assert resolve_marginal_rate(_sources({"TAX_MARGINAL_RATE": text})) == expected
 
 
-@pytest.mark.parametrize("text", ["abc", "-0.1", "1.5", "9.75", "", "  ", "1e-1", "NaN", "32%"])
+@pytest.mark.parametrize(
+    "text",
+    ["abc", "-0.1", "1.5", "9.75", "", "  ", "1e-1", "NaN", "32%", "00.5", "007", "0." + "1" * 13],
+)
 def test_invalid_marginal_rate_names_the_variable_and_source_but_not_the_value(
     text: str,
 ) -> None:
@@ -644,3 +648,118 @@ def test_run_output_verifies_and_a_changed_estimate_fails_verify(
     path.write_bytes(path.read_bytes().replace(b"115.00", b"915.00"))
     assert main(["verify", "--output", str(output)]) == 4
     assert "MISMATCH estimate.csv" in capsys.readouterr().out
+
+
+# --- bounds and review follow-ups ----------------------------------------------
+
+HEADER_LINE = "currency,rate_to_aud\n"
+
+
+@pytest.mark.parametrize(
+    "rate",
+    ["9" * 40, "1234567", "0.1234567890123", "00.5", "01.5", "9" * 40 + "." + "9" * 40],
+)
+def test_out_of_range_rate_digits_are_a_settings_error_without_the_value(rate: str) -> None:
+    with pytest.raises(SettingsError) as raised:
+        parse_rates((HEADER_LINE + f"USD,{rate}\n").encode(), "rates.csv")
+    message = str(raised.value)
+    assert "rates file 'rates.csv' line 2" in message
+    assert "at most 6 integer and 12 fraction digits" in message
+    assert rate not in message
+    assert raised.value.exit_code == 2
+
+
+def test_rate_at_the_digit_limits_is_accepted() -> None:
+    rate = "999999.999999999999"
+    assert parse_rates((HEADER_LINE + f"USD,{rate}\n").encode(), "r.csv") == {"USD": Decimal(rate)}
+
+
+def test_marginal_rate_zero_forms_keep_the_manifest_value_as_typed() -> None:
+    assert resolve_marginal_rate(_sources({"TAX_MARGINAL_RATE": "0.5"})) == Decimal("0.5")
+    with pytest.raises(SettingsError):
+        resolve_marginal_rate(_sources({"TAX_MARGINAL_RATE": "00.5"}))
+
+
+def test_amount_too_large_for_the_arithmetic_is_an_estimate_error_without_the_value() -> None:
+    huge = str(Decimal(10) ** 30)
+    for accepted, review in (([_row(1, huge)], []), ([], [_row(1, huge)])):
+        with pytest.raises(EstimateError) as raised:
+            _estimate(accepted, review)
+        assert raised.value.exit_code == 4
+        assert "1000000" not in str(raised.value)
+
+
+def test_huge_foreign_amount_with_a_rate_is_an_estimate_error() -> None:
+    row = _row(1, "9" * 25, currency="USD")
+    with pytest.raises(EstimateError):
+        _estimate([row], rates={"USD": Decimal("999999.999999999999")})
+
+
+def test_huge_amount_in_a_document_exits_4_and_writes_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    value = "1" + "0" * 30
+    documents = [
+        document_payload(1, correspondent=5, custom_fields=[{"field": 10, "value": value}])
+    ]
+    _install(monkeypatch, make_handler(documents))
+    output = tmp_path / "out"
+    assert main(_run_cli(tmp_path, output)) == 4
+    err = capsys.readouterr().err
+    assert "too large" in err
+    assert "Traceback" not in err
+    assert "0" * 20 not in err
+    assert not output.exists()
+
+
+def test_rates_file_with_only_absent_currencies_is_clean_and_recorded(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    documents = [
+        document_payload(1, correspondent=5, custom_fields=[{"field": 10, "value": "100.00"}])
+    ]
+    _install(monkeypatch, make_handler(documents))
+    content = HEADER_LINE + "GBP,2.00\n"
+    rates = _write_rates(tmp_path, content)
+    output = tmp_path / "out"
+    assert main(_run_cli(tmp_path, output, "--rates", str(rates))) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert _estimate_line(captured.out) == "estimate: deductions AUD 100.00, pending AUD 0.00"
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    assert (
+        manifest["parameters"]["rates_file_sha256"] == hashlib.sha256(content.encode()).hexdigest()
+    )
+    rows = _parsed((output / "estimate.csv").read_bytes())
+    assert [row[1] for row in rows if row[0] == "deductions_currency"] == ["AUD"]
+
+
+def test_empty_dotenv_marginal_rate_exits_2_and_writes_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _install(monkeypatch, make_handler(_documents()))
+    env_file = tmp_path / "paperless.env"
+    env_file.write_text("TAX_MARGINAL_RATE=\n", encoding="utf-8")
+    output = tmp_path / "out"
+    assert main(_run_cli(tmp_path, output, "--env-file", str(env_file))) == 2
+    err = capsys.readouterr().err
+    assert "TAX_MARGINAL_RATE in env file" in err
+    assert not output.exists()
+
+
+def test_crlf_rates_file_with_a_lowercase_code_exits_2_with_the_line_and_no_value(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _install(monkeypatch, make_handler(_documents()))
+    crlf = "\r\n"
+    rates = _write_rates(
+        tmp_path, "currency,rate_to_aud" + crlf + "USD,1.5" + crlf + "zzq,7.77" + crlf
+    )
+    output = tmp_path / "out"
+    assert main(_run_cli(tmp_path, output, "--rates", str(rates))) == 2
+    err = capsys.readouterr().err
+    assert "line 3" in err
+    assert "currency must be three uppercase letters" in err
+    assert "zzq" not in err
+    assert "7.77" not in err
+    assert not output.exists()

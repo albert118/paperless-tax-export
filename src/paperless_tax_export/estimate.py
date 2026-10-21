@@ -19,12 +19,12 @@ import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
 from paperless_tax_export.classify import ClassifiedRow
 from paperless_tax_export.csv_output import formula_guard, render_table_bytes
-from paperless_tax_export.errors import SettingsError
+from paperless_tax_export.errors import EstimateError, SettingsError
 
 AUD = "AUD"
 NO_TYPE_LABEL = "(none)"
@@ -52,7 +52,10 @@ TAX_SAVING_NOTE = (
 
 _CENT = Decimal("0.01")
 _CURRENCY_RE = re.compile(r"[A-Z]{3}")
-_POSITIVE_DECIMAL_RE = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+# At most 6 integer digits (no leading zeros) and 12 fraction digits, so a rate can never
+# exhaust the Decimal context.
+_POSITIVE_DECIMAL_RE = re.compile(r"(?:0|[1-9][0-9]{0,5})(?:\.[0-9]{1,12})?")
+PENDING_NOTE = "upper bound: includes suspected duplicates and items that may never be deductions"
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +94,8 @@ class Estimate:
 def parse_positive_decimal(text: str) -> Decimal | None:
     """A plain positive-or-zero decimal string as ``Decimal``, else ``None``.
 
-    Accepts ASCII digits with an optional fraction only: no sign, exponent, thousands
+    Accepts ASCII digits with an optional fraction only (at most 6 integer digits without
+    leading zeros, at most 12 fraction digits): no sign, exponent, thousands
     separator, ``NaN`` or ``Infinity``. The value never passes through ``float``.
     """
     return Decimal(text) if _POSITIVE_DECIMAL_RE.fullmatch(text) else None
@@ -148,7 +152,10 @@ def _parse_rate_row(cells: Sequence[str], where: str) -> tuple[str, Decimal]:
         raise SettingsError(f"{where}: currency must be three uppercase letters")
     rate = parse_positive_decimal(raw_rate)
     if rate is None:
-        raise SettingsError(f"{where}: rate_to_aud must be a positive decimal number")
+        raise SettingsError(
+            f"{where}: rate_to_aud must be a positive decimal number "
+            "(at most 6 integer and 12 fraction digits, no leading zeros)"
+        )
     if rate <= 0:
         raise SettingsError(f"{where}: rate_to_aud must be greater than zero")
     return code, rate
@@ -211,7 +218,29 @@ def build_estimate(
     rates: Mapping[str, Decimal],
     marginal_rate: Decimal | None,
 ) -> Estimate:
-    """Compute the estimate rows in their fixed order from the run's classified rows."""
+    """Compute the estimate rows in their fixed order from the run's classified rows.
+
+    Raises ``EstimateError`` (exit 4, no value in the message) when an amount is so large
+    that the ``Decimal`` arithmetic overflows its context.
+    """
+    try:
+        return _build_estimate(accepted, review, rates, marginal_rate)
+    except InvalidOperation as exc:
+        raise EstimateError(
+            "an amount is too large for the estimate arithmetic; check the document amounts"
+        ) from exc
+
+
+def _join_notes(*notes: str) -> str:
+    return "; ".join(note for note in notes if note)
+
+
+def _build_estimate(
+    accepted: Sequence[ClassifiedRow],
+    review: Sequence[ClassifiedRow],
+    rates: Mapping[str, Decimal],
+    marginal_rate: Decimal | None,
+) -> Estimate:
     claimable = _tally_rows(accepted, rates)
     pending = _tally_rows([row for row in review if row.amount_inc_gst is not None], rates)
     without_amount = sum(1 for row in review if row.amount_inc_gst is None)
@@ -270,7 +299,7 @@ def build_estimate(
             count=pending_tally.count,
             currency=AUD,
             amount_aud=pending_tally.total_aud,
-            notes=pending_tally.note,
+            notes=_join_notes(PENDING_NOTE, pending_tally.note),
         )
     )
     rows.append(

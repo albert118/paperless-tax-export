@@ -226,6 +226,8 @@ file, as it should, so run it straight after a run or against a copy.
 A manifest written by 0.2.x lists `ibkr-documents.csv` and `counts.ibkr_count`, so `verify`
 rejects it with exit 2. Re-run `run` to produce a current manifest.
 
+`estimate.csv` is a required output: a manifest that does not list it also exits 2, naming it.
+
 ## The Paperless token
 
 The token is never committed and never pasted into a file that is tracked by git.
@@ -295,7 +297,7 @@ order:
 | `deductions_currency` | currency code | One row per currency in `deductions.csv`, sorted by code: `count`, the native total in `amount`, the rate used in `rate_to_aud` (blank for AUD or when there is none) and the converted total in `amount_aud` (blank when there is no rate; `notes` says `no rate; excluded from the AUD total`). |
 | `deductions_by_type` | document type, `(none)` when blank | `count` and the AUD total of converted amounts, sorted by type name. |
 | `deductions_by_month` | `YYYY-MM` of the row date | `count` and the AUD total of converted amounts, sorted ascending. |
-| `pending` | `review rows with an amount` | The `review.csv` rows that have an amount: `count` and their AUD total, negatives included. These are not claimable yet. |
+| `pending` | `review rows with an amount` | The `review.csv` rows that have an amount: `count` and their AUD total, negatives included. These are not claimable yet. It is an upper bound: it includes suspected duplicates and items that may never be deductions (the `notes` cell says so). |
 | `pending_no_amount` | `review rows without an amount` | `count` of the `review.csv` rows with no amount. |
 | `tax_saving` | `estimated saving at marginal rate <rate>` | Only when `TAX_MARGINAL_RATE` is set: the deductions AUD total times the rate, in `amount_aud`. |
 
@@ -311,10 +313,15 @@ How the figures are worked out:
   `rough`.
 - An item you cleared with the `asset-reviewed` tag is in `deductions.csv` and counts at its
   full amount.
-- `pending` is not in the deductions total. It shows what could become claimable once you
-  fix the review rows.
+- `pending` is not in the deductions total. It is an upper bound: `review.csv` also holds
+  suspected duplicates, zero or negative amounts and income-tagged items, so it includes
+  items that may never be deductions.
 - A row whose currency has no rate is excluded from every AUD figure and counted in
-  `notes` (for example `excluded, no rate: JPY 2`). Nothing is dropped silently.
+  `notes` (for example `excluded, no rate: JPY 2`). Nothing is dropped silently. The
+  `count` on the `deductions`, `deductions_by_type` and `deductions_by_month` rows still
+  includes those excluded rows; only the AUD amounts leave them out.
+- Limits: a rate has at most 6 integer digits and 12 fraction digits and no leading zeros
+  (`0.5`, not `00.5`); an amount too large for the arithmetic exits 4 and writes nothing.
 
 ### Exchange rates: `run --rates FILE`
 
@@ -352,7 +359,9 @@ environment variable wins over an entry in the dotenv file named by `--env-file`
 TAX_MARGINAL_RATE=0.32
 ```
 
-The value must be a plain decimal from 0 to 1 (`0` and `1` are accepted). Anything else,
+The value must be a plain decimal from 0 to 1 (`0` and `1` are accepted), with no leading
+zeros (`0.5`, not `00.5`) and at most 12 fraction digits, so the manifest records it exactly
+as typed. Anything else,
 including an empty value, exits 2 with a message that names the variable and where it came
 from, never the value. The rate is recorded in `manifest.json` as `parameters.marginal_rate`
 (a string, or `null`).
