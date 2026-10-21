@@ -1,0 +1,9 @@
+note: GST field not configured; GST column left blank
+note: supplier field not configured; supplier falls back to the document correspondent
+9 accepted, 3 review (12 deduction documents)
+tagged 81, out of FY 69, selected in FY 12, IBKR 12
+deductions.csv would write output/deductions.csv
+review.csv would write output/review.csv
+ibkr-documents.csv would write output/ibkr-documents.csv
+manifest.json would write output/manifest.json
+dry run: nothing was written
