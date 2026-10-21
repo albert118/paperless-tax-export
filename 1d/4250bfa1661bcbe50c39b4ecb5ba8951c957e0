@@ -1,0 +1,27 @@
+src/paperless_tax_export/audit.py
+  s_b0836905a23abc::t_e3643d64f44696 27-28
+  s_b0836905a23abc::t_ec135fc3a2d0e2 294-297
+  s_b0836905a23abc::t_e478cc8d866a67 185-186
+  s_b0836905a23abc::t_06ec860129d9c5 265
+  s_b0836905a23abc::t_3dc6fe9b40ec40 623,628-639
+  s_b0836905a23abc::t_1b7af9a5d197a0 742-743
+  s_b0836905a23abc::t_a0478042488511 407-425,428,433,436-437,440-445
+tests/test_audit.py
+  s_b0836905a23abc::t_3cb236e2220011 217-289
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1d4250bfa1661bcbe50c39b4ecb5ba8951c957e0",
+  "prompts": {},
+  "sessions": {
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
