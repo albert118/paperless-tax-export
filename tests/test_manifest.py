@@ -18,6 +18,7 @@ from conftest import (
     json_response,
     make_client,
     page_payload,
+    paperless_filter_matches,
     tag_payload,
 )
 
@@ -73,20 +74,6 @@ def make_handler(
     """Serve every run endpoint, filtering documents like Paperless; optionally break paging."""
     all_documents = documents if documents is not None else _documents()
 
-    def matches(document: dict[str, object], params: httpx.QueryParams) -> bool:
-        created = str(document["created"])[:10]
-        if "created__gte" in params and created < params["created__gte"]:
-            return False
-        if "created__lte" in params and created > params["created__lte"]:
-            return False
-        if "correspondents__id" in params and document["correspondent"] != int(
-            params["correspondents__id"]
-        ):
-            return False
-        tag_ids = document["tags"]
-        assert isinstance(tag_ids, list)
-        return not ("tags__id__all" in params and int(params["tags__id__all"]) not in tag_ids)
-
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         params = request.url.params
@@ -109,9 +96,9 @@ def make_handler(
             return json_response(page_payload([document_type_payload(6, "Statement")]))
         if path == "/api/documents/":
             if params.get("page_size") == "1" and params.get("fields") == "id":
-                tagged = [d for d in all_documents if matches(d, params)]
+                tagged = [d for d in all_documents if paperless_filter_matches(d, params)]
                 return json_response(page_payload([{"id": 1}] if tagged else [], count=len(tagged)))
-            found = [d for d in all_documents if matches(d, params)]
+            found = [d for d in all_documents if paperless_filter_matches(d, params)]
             if fault is not None and "tags__id__all" in params:
                 return _faulty_page(found, fault, params.get("page"))
             return json_response(page_payload(found))

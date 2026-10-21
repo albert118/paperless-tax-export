@@ -137,7 +137,7 @@ class PaperlessClient:
         if tag_id is not None:
             params["tags__id__all"] = str(tag_id)
         if correspondent_id is not None:
-            params["correspondents__id"] = str(correspondent_id)
+            params["correspondent__id"] = str(correspondent_id)
         return self._paginate("/api/documents/", TypeAdapter(Page[Document]), params=params)
 
     def count_documents(self, *, tag_id: int) -> int:

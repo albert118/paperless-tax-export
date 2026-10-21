@@ -15,6 +15,7 @@ from conftest import (
     json_response,
     make_client,
     page_payload,
+    paperless_filter_matches,
     tag_payload,
 )
 
@@ -29,7 +30,7 @@ from paperless_tax_export.settings import Settings
 
 IBKR_ID = 8
 DEDUCTION_TAG_ID = 1
-HEADER = "paperless_document_id,title,created,document_type,correspondent,tags\r\n"
+HEADER = "paperless_document_id,title,created,document_type,correspondent\r\n"
 
 
 def make_handler(
@@ -40,20 +41,6 @@ def make_handler(
 ) -> Callable[[httpx.Request], httpx.Response]:
     """A handler that applies the tag, correspondent and created filters like Paperless."""
     all_tags = tags if tags is not None else [tag_payload(DEDUCTION_TAG_ID, "tax deductible")]
-
-    def matches(document: dict[str, object], params: httpx.QueryParams) -> bool:
-        created = str(document["created"])[:10]
-        if "created__gte" in params and created < params["created__gte"]:
-            return False
-        if "created__lte" in params and created > params["created__lte"]:
-            return False
-        if "correspondents__id" in params and document["correspondent"] != int(
-            params["correspondents__id"]
-        ):
-            return False
-        tag_ids = document["tags"]
-        assert isinstance(tag_ids, list)
-        return not ("tags__id__all" in params and int(params["tags__id__all"]) not in tag_ids)
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -69,7 +56,9 @@ def make_handler(
         if path == "/api/document_types/":
             return json_response(page_payload([document_type_payload(6, "Statement")]))
         if path == "/api/documents/":
-            found = [document for document in documents if matches(document, params)]
+            found = [
+                document for document in documents if paperless_filter_matches(document, params)
+            ]
             return json_response(page_payload(found))
         return json_response({}, status_code=404)
 
@@ -107,7 +96,7 @@ def read_text(path: Path) -> str:
 # --- client -----------------------------------------------------------------
 
 
-def test_list_documents_maps_correspondent_id_to_correspondents_id() -> None:
+def test_list_documents_maps_correspondent_id_to_correspondent_id() -> None:
     captured: dict[str, str] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -117,10 +106,37 @@ def test_list_documents_maps_correspondent_id_to_correspondents_id() -> None:
     make_client(handler).list_documents(
         correspondent_id=8, created_from="2025-07-01", created_to="2026-06-30"
     )
-    assert captured["correspondents__id"] == "8"
+    assert captured["correspondent__id"] == "8"
+    assert "correspondents__id" not in captured
     assert "tags__id__all" not in captured
     assert captured["created__gte"] == "2025-07-01"
     assert captured["created__lte"] == "2026-06-30"
+
+
+def test_strict_paperless_filter_returns_only_the_correspondent_documents() -> None:
+    documents = [
+        ibkr_document(1),
+        document_payload(2, created="2025-10-01T00:00:00Z", correspondent=5),
+        document_payload(3, created="2025-10-01T00:00:00Z", correspondent=None),
+    ]
+    sent: list[httpx.QueryParams] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request.url.params)
+        found = [d for d in documents if paperless_filter_matches(d, request.url.params)]
+        return json_response(page_payload(found))
+
+    listed = make_client(handler).list_documents(
+        correspondent_id=IBKR_ID, created_from="2025-07-01", created_to="2026-06-30"
+    )
+    assert [document.id for document in listed] == [1]
+    assert "correspondent__id" in sent[0]
+
+
+def test_strict_mock_ignores_the_misspelt_plural_filter_name() -> None:
+    params = httpx.QueryParams({"correspondents__id": str(IBKR_ID)})
+    other = document_payload(2, created="2025-10-01T00:00:00Z", correspondent=5)
+    assert paperless_filter_matches(other, params) is True
 
 
 def test_list_documents_without_tag_or_correspondent_is_rejected() -> None:
@@ -194,7 +210,74 @@ def test_select_duplicate_correspondent_names_are_a_startup_error() -> None:
         select([ibkr_document(1)], duplicates)
 
 
+def ignoring_filter_handler(
+    documents: list[dict[str, object]],
+) -> Callable[[httpx.Request], httpx.Response]:
+    """Like make_handler, but the documents endpoint ignores every filter."""
+    inner = make_handler(correspondents=ibkr_correspondents(), documents=documents)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/documents/":
+            return json_response(page_payload(list(documents)))
+        return inner(request)
+
+    return handler
+
+
+def test_select_fails_when_the_server_ignores_the_correspondent_filter() -> None:
+    documents = [
+        ibkr_document(1),
+        document_payload(
+            2, title="Secret supplier", created="2025-10-01T00:00:00Z", correspondent=5
+        ),
+        document_payload(3, created="2025-10-01T00:00:00Z", correspondent=None),
+    ]
+    client = make_client(ignoring_filter_handler(documents))
+    with pytest.raises(StartupError) as excinfo:
+        select_ibkr_documents(client, "Interactive Brokers", "2025-07-01", "2026-06-30")
+    message = str(excinfo.value)
+    assert "Interactive Brokers" in message
+    assert "2 of 3" in message
+    assert "ignored the correspondent filter" in message
+    assert "Secret supplier" not in message
+
+
+def test_run_exits_4_and_writes_nothing_when_the_server_ignores_the_correspondent_filter(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    documents = [ibkr_document(1), document_payload(2, created="2025-10-01T00:00:00Z")]
+    transport = httpx.MockTransport(ignoring_filter_handler(documents))
+
+    def build(
+        base_url: str, token: str, *, page_size: int = 100, timeout: float = 30.0
+    ) -> PaperlessClient:
+        return PaperlessClient(
+            base_url, token, page_size=page_size, timeout=timeout, transport=transport
+        )
+
+    monkeypatch.setattr("paperless_tax_export.cli.PaperlessClient", build)
+    token = tmp_path / "token.txt"
+    token.write_text("test-token", encoding="utf-8")
+    output = tmp_path / "out"
+    code = main(["run", "--token-file", str(token), "--output", str(output)])
+    assert code == 4
+    assert "ignored the correspondent filter" in capsys.readouterr().err
+    assert not output.exists()
+
+
 # --- CSV --------------------------------------------------------------------
+
+
+def test_ibkr_header_has_no_tags_column() -> None:
+    assert IBKR_COLUMNS == (
+        "paperless_document_id",
+        "title",
+        "created",
+        "document_type",
+        "correspondent",
+    )
 
 
 def test_ibkr_csv_with_no_rows_is_header_only(tmp_path: Path) -> None:
@@ -204,12 +287,12 @@ def test_ibkr_csv_with_no_rows_is_header_only(tmp_path: Path) -> None:
     assert tuple(HEADER.strip().split(",")) == IBKR_COLUMNS
 
 
-def test_ibkr_csv_sorts_rows_sorts_tags_and_guards_text(tmp_path: Path) -> None:
+def test_ibkr_csv_sorts_rows_and_guards_text(tmp_path: Path) -> None:
     path = tmp_path / "ibkr-documents.csv"
     rows = [
-        IbkrRow(2, "=HYPERLINK(1)", "2025-10-01", "Statement", "Interactive Brokers", ("b", "a")),
-        IbkrRow(1, "Plain", "2025-10-01", None, None, ()),
-        IbkrRow(3, "Earlier", "2025-08-01", "Statement", "Interactive Brokers", ("-x",)),
+        IbkrRow(2, "=HYPERLINK(1)", "2025-10-01", "Statement", "Interactive Brokers"),
+        IbkrRow(1, "Plain", "2025-10-01", None, None),
+        IbkrRow(3, "Earlier", "2025-08-01", "Statement", "Interactive Brokers"),
     ]
     write_ibkr_csv(path, rows=rows)
     data = path.read_bytes()
@@ -217,9 +300,9 @@ def test_ibkr_csv_sorts_rows_sorts_tags_and_guards_text(tmp_path: Path) -> None:
     assert b"\n" not in data.replace(b"\r\n", b"")
     assert read_text(path) == (
         HEADER
-        + "3,Earlier,2025-08-01,Statement,Interactive Brokers,'-x\r\n"
-        + "1,Plain,2025-10-01,,,\r\n"
-        + "2,'=HYPERLINK(1),2025-10-01,Statement,Interactive Brokers,a; b\r\n"
+        + "3,Earlier,2025-08-01,Statement,Interactive Brokers\r\n"
+        + "1,Plain,2025-10-01,,\r\n"
+        + "2,'=HYPERLINK(1),2025-10-01,Statement,Interactive Brokers\r\n"
     )
 
 
@@ -241,8 +324,8 @@ def test_run_export_writes_the_ibkr_index(tmp_path: Path) -> None:
     assert result.warnings == ()
     assert read_text(tmp_path / "ibkr-documents.csv") == (
         HEADER
-        + "1,Statement,2025-09-01,Statement,Interactive Brokers,\r\n"
-        + "2,Statement,2026-01-02,Statement,Interactive Brokers,tax-information\r\n"
+        + "1,Statement,2025-09-01,Statement,Interactive Brokers\r\n"
+        + "2,Statement,2026-01-02,Statement,Interactive Brokers\r\n"
     )
 
 

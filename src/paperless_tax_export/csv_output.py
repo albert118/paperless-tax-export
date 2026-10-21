@@ -52,7 +52,6 @@ IBKR_COLUMNS: tuple[str, ...] = (
     "created",
     "document_type",
     "correspondent",
-    "tags",
 )
 
 # Column *names* differ from the row attribute for exactly one traceability key.
@@ -115,7 +114,6 @@ class IbkrRow:
     created: str
     document_type: str | None
     correspondent: str | None
-    tags: tuple[str, ...]
 
 
 def write_ibkr_csv(path: Path, *, rows: Sequence[IbkrRow]) -> None:
@@ -144,7 +142,6 @@ def _render_ibkr_csv(rows: Sequence[IbkrRow]) -> str:
                 row.created,
                 _formula_guard(row.document_type or ""),
                 _formula_guard(row.correspondent or ""),
-                _formula_guard("; ".join(sorted(row.tags))),
             ]
         )
     return buffer.getvalue()
