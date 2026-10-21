@@ -64,3 +64,30 @@ costs one file and no test code.
   `correspondents`, `correspondents_visible == 0`, the deduction tag among
   `tag_matches`, `deduction_document_count == 13`, `tax_metadata_tag.exists`)
   are asserted by `test_audit_fixtures.py`.
+
+## audit-live-2026-10-21-0.1.0.json
+
+- **Recorded:** 2026-10-21 12:35 UTC, from `https://paperless.daedalus-project.dev/`
+  (Paperless-ngx 3.3.2, API v10), by the `v0.1.0` release.
+- **Why it is kept:** it is the first live recording with the archived-version
+  counts (the D-1 fix): 14 deduction documents, 4 with an archived version and 10
+  without, which sum to `deduction_document_count`. Reading the
+  `archived_file_name` segment counts against 4 documents, not 14, is the point.
+- **Facts it pins:** `unavailable` is empty and 184 correspondents are visible;
+  the IBKR correspondent resolves with 24 documents; the tag `tax deductible`
+  has 48 documents, 14 in the FY; `Transaction Amount` is a monetary field with
+  66 documents instance-wide and 3 of the 14 tagged FY documents; `Claimable %`,
+  `Reference` and `Transaction Date` are empty on all 14; the FY storage path
+  holds 23 documents; the `notes` list still shows the `http://` to `https://`
+  `next` re-anchor, so the proxy fix is still outstanding.
+- **Compared with `audit-live-2026-10-20T1554Z.json`:** the tag count (48), FY
+  count (14), `Transaction Amount` coverage (3 of 14) and IBKR count (24) are
+  unchanged. Only the storage path count moved, from 19 to 23.
+- **A gap it shows:** `expected_fields` lists the amount and work-use fields only.
+  `Settings.field_date` is configured (`Transaction Date`) but is not among the
+  expected fields, so the audit would not report a renamed date field as
+  missing. `test_v0_1_0_recording_does_not_list_the_date_field_among_expected_fields`
+  records this as an observation, not a requirement.
+- The facts above are asserted by `test_audit_fixtures.py`. Two generic checks
+  also run on every recording: archived plus none equals the deduction count (when
+  the counts exist), and each field's present, null and absent counts sum to it.
