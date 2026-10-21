@@ -224,7 +224,6 @@ def _ibkr_row(document: Document, context: ClassifyContext) -> IbkrRow:
         created=document.created[:10],  # Paperless timestamps are ISO 8601
         document_type=None if document_type is None else context.document_types.get(document_type),
         correspondent=None if correspondent is None else context.correspondents.get(correspondent),
-        tags=tuple(context.tags[tag_id] for tag_id in document.tags if tag_id in context.tags),
     )
 
 
