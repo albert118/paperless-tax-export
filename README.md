@@ -23,6 +23,22 @@ To run it in Docker next to Paperless-ngx, see [examples/README.md](examples/REA
 
 All files go into `output/`, which is never committed.
 
+`deductions.csv` has these columns, in order: `paperless_document_id`, `date`,
+`supplier_name`, `description`, `amount_inc_gst`, `gst_amount`, `document_type`,
+`work_use_pct`, `document_modified`, `notes_for_agent`. `review.csv` has the same columns
+followed by `title`, `correspondent`, `created`, `tags`, `reason_codes`, `raw_amount` and
+`raw_date`, so a review row can be promoted by editing it.
+
+`work_use_pct` is read from the `Claimable %` custom field and written as the stored number
+with two decimals. A blank `work_use_pct` means not apportioned: treat it as a full claim.
+Enter a value in Paperless only for the rare partly-private item. A blank value adds no
+note and no review code.
+
+The columns `category_label`, `claim_type`, `apportionment_basis`, `reimbursed`,
+`wfh_method`, `asset_cost_inc_gst` and `asset_set_id` are deferred to a later revision.
+Files from earlier versions have these seven extra blank columns, so column positions
+differ from the current output.
+
 CSV format: UTF-8 with BOM, `\r\n` line endings, ISO dates, two-decimal amounts without
 currency symbols or thousands separators, rows sorted by date then document ID, and text
 cells guarded against formula injection. The Paperless document ID is on every row as
