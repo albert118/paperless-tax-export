@@ -1,0 +1,111 @@
+tests/test_manifest.py
+  s_b0836905a23abc::t_c52f89fc4317bc 34,266,308,327
+src/paperless_tax_export/parsing.py
+  s_97719562e4466d::t_535276baa29175 60-61,68,83
+AGENTS.md
+  s_b0836905a23abc::t_d4eaee48d74919 18,29,34-35,84-88,98
+  s_b0836905a23abc::t_3d9b433d1d61ac 36-39,45
+src/paperless_tax_export/csv_output.py
+  s_97719562e4466d::t_99ee97fa212d5e 10-11,31,36-40,42-45,47,50,108-109,118-119,124,127-129,132,135
+examples/README.md
+  s_b0836905a23abc::t_801511d9446483 55
+  s_b0836905a23abc::t_1a72a3a43df6f0 41,46-47,58
+src/paperless_tax_export/verify.py
+  s_97719562e4466d::t_8d5c923a4d175c 29,36,191
+src/paperless_tax_export/manifest.py
+  s_97719562e4466d::t_69505b6aa2137d 22,48,82
+.github/release-notes-template.md
+  s_b0836905a23abc::t_735c41bd41a1ba 21
+tests/test_cli.py
+  s_b0836905a23abc::t_85c295642fa62d 337-338
+src/paperless_tax_export/classify.py
+  s_97719562e4466d::t_7a32b29fac5345 23-26
+  s_97719562e4466d::t_b6e5569b590d59 45-46,78,213,230-232,242
+tests/test_ibkr_index.py
+  s_b0836905a23abc::t_68e3c6060a35e9 1,24-28,280-281,290-292,294,297-298,300-302,304,319,330,332,353,366,369,376,379,387,427-428
+tests/test_verify.py
+  s_b0836905a23abc::t_e675c71e4faadf 27,32,72,79,176,196,205,303-304,326-353,496,498,535
+src/paperless_tax_export/export.py
+  s_b0836905a23abc::t_bd59ad44ecd397 4,22,24,29,58,91,138,141-144,156-158,168,182,207,210,219,223,225,229,232
+tests/test_parsing.py
+  s_97719562e4466d::t_d07c0c39ec9aa0 51,55,62,98
+tests/test_classify.py
+  s_b0836905a23abc::t_a9c431c417bdaa 422,752,770,774,776,781-782,787,792,794-795,797,803,808
+  s_b0836905a23abc::t_364b9ae728706e 419-421
+  s_b0836905a23abc::t_dfa90dcbc1838e 405,411,413-418,426-453,471-473
+  s_b0836905a23abc::t_73f8cd2a1cd189 423-425
+README.md
+  s_b0836905a23abc::t_cf350a3cbfadb2 10,22,28-42,47-57,152-153,169-171
+  s_b0836905a23abc::t_9a35e93bddcd18 12,172-225,238
+tests/test_export.py
+  s_b0836905a23abc::t_5c9f5e6eef1f3c 104-107,152,169,182
+tests/test_csv_output.py
+  s_b0836905a23abc::t_409c45655c279e 140-142
+  s_b0836905a23abc::t_283ddd2f458d58 149
+  s_b0836905a23abc::t_cff9949b3669f5 150-151
+  s_b0836905a23abc::t_fdf6101809c7cb 136
+  s_b0836905a23abc::t_1bbe38d23def43 11,27,46,64-71,85,100,102,104-117,124,127-129,135,137,143,169,182,201-202,223,236-238,240,243,245-256,263,270-275,277-290,301,303-321
+  s_b0836905a23abc::t_36506bcf639377 130-134
+  s_b0836905a23abc::t_25deb7df5d4c43 139
+  s_b0836905a23abc::t_f36f725d2ab542 144-148
+  s_b0836905a23abc::t_b9723c59b2d44d 17
+src/paperless_tax_export/cli.py
+  s_97719562e4466d::t_42a3b118822550 149,391
+  s_b0836905a23abc::t_c752749e89995e 254
+  s_b0836905a23abc::t_c004e131e66c1c 251-253
+  s_b0836905a23abc::t_47ac4ae1ea6a6c 255-257
+  s_7826c09076e861::t_f01ef680341bb2 20-27,238-250,258-285,304-305,409-448
+tests/test_download.py
+  s_b0836905a23abc::t_f7b81ff1482679 1-51,53-214,216-460,463-476,481-675,677-777
+  s_b0836905a23abc::t_9cfc63320787bf 477-480
+  s_b0836905a23abc::t_a631d9c3b491b7 52
+  s_b0836905a23abc::t_0693c15a3cf066 215
+  s_b0836905a23abc::t_1ef2633efba5a0 461-462
+  s_b0836905a23abc::t_eca9b673456bd3 676
+  s_b0836905a23abc::t_4a313bb64ed3ad 778-780
+src/paperless_tax_export/client.py
+  s_b0836905a23abc::t_d695c3e33aeb1b 60-61
+  s_b0836905a23abc::t_fbb7d6f237adef 63
+  s_b0836905a23abc::t_1b59d0db23a599 57-59
+  s_b0836905a23abc::t_d0f6b092c8a677 62
+  s_b0836905a23abc::t_7b905f9e32b5d9 64-66
+  s_7826c09076e861::t_3f0b5c23b8969c 13-16,19,27,54-56,67-120,231-295,486-506
+src/paperless_tax_export/download.py
+  s_b0836905a23abc::t_e57deae0f8d099 1-440
+tests/conftest.py
+  s_7826c09076e861::t_dd18d32a5b3229 10,169-201
+src/paperless_tax_export/errors.py
+  s_b0836905a23abc::t_670d16250608cc 80-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c2ef7c1418d26267426af79e07b583e46c561d5b",
+  "prompts": {},
+  "sessions": {
+    "s_7826c09076e861": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a77e8da2461a3db20",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_97719562e4466d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a16b78b311d1fb531",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
