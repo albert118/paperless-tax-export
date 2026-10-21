@@ -67,7 +67,7 @@ failing:
 The audit is a diagnostic, not a gate: missing tags, missing fields and zero coverage
 are findings and the exit code stays 0. Endpoints the token cannot read are recorded in
 `unavailable` and listed as warnings. Exit codes are 2 for bad flags or an unreadable or
-empty token file, 3 for an auth/network/server error on the document fetch (only made
+empty token (from any source) or unreadable `--env-file`, 3 for an auth/network/server error on the document fetch (only made
 when exactly one tag matches) or when every optional read failed and no tags,
 correspondents, document types, storage paths or custom fields came back at all, and 4
 for a pagination guard failure.
@@ -103,8 +103,40 @@ The token is never committed and never pasted into a file that is tracked by git
 2. Make sure that user can see the target documents. A document the user cannot see is
    silently missing from the export, with no error.
 3. Create the API token for that user and store it in a password manager.
-4. Locally, write it to `secrets/paperless-token.txt` (ignored by git). In the container
-   it is a mounted secret file.
+4. Supply it through one of the sources below. Never commit it.
+
+### Configuration sources
+
+`audit` and `run` read the token and base URL from the first of these that is set:
+
+1. the command-line flag: `--token-file PATH` or `--base-url URL`;
+2. a real environment variable: `PAPERLESS_TOKEN` (the token itself) or
+   `PAPERLESS_BASE_URL`;
+3. an entry of the same name in the dotenv file named by `--env-file PATH` (or the
+   `PAPERLESS_ENV_FILE` environment variable);
+4. the default: `secrets/paperless-token.txt` and `http://localhost:8000`.
+
+There is no `--token` flag, so the token never shows up in the process list. A `.env`
+in the working directory is never loaded; the dotenv file is read only when you name it.
+Its entries are parsed, not exported, so a real environment variable always wins. An
+empty or whitespace-only token, or an unreadable `--env-file`, exits 2. Error messages
+name the source, never the value.
+
+Example dotenv file (placeholder values):
+
+```dotenv
+PAPERLESS_TOKEN=replace-with-the-view-only-api-token
+PAPERLESS_BASE_URL=https://paperless.example.com
+```
+
+Keep this file outside the repository and make it readable only by you
+(`chmod 600 /path/to/paperless.env`). In the container, docker compose injects it with
+`env_file:`, so the tool sees ordinary environment variables. On another machine, pass
+the same file:
+
+```sh
+uv run paperless-tax-export audit --env-file /path/to/paperless.env
+```
 
 ## Development
 

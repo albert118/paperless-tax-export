@@ -119,8 +119,8 @@ pyvenv.cfg
 # ---------------------------------------------------------------------------
 
 # Secrets. The Paperless API token is never committed: no token file, no .env
-# with real values. Local runs read it from secrets/, the container from a
-# mounted secret file.
+# with real values. Local runs read it from secrets/ or a dotenv file outside
+# the repo; the container gets it as an environment variable from compose.
 secrets/
 *.token
 paperless-token*.txt
