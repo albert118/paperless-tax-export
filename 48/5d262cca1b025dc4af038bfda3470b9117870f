@@ -1,0 +1,50 @@
+src/paperless_tax_export/payslips.py
+  s_b0836905a23abc::t_269910cc059c4c 1-383
+  s_b0836905a23abc::t_f21eba6fe1986c 384-386
+  s_b0836905a23abc::t_3a59e277cb3f36 387-388
+tests/test_payslips.py
+  s_b0836905a23abc::t_fb44e552d5960e 1-722
+  s_b0836905a23abc::t_134e73647cf4c6 723-725
+AGENTS.md
+  s_b0836905a23abc::t_1b2f5980af0119 23-24,62-77
+README.md
+  s_b0836905a23abc::t_b52e89a73abd8d 23,232-234,306,502-585
+src/paperless_tax_export/cli.py
+  s_b0836905a23abc::t_57f444b29c62c8 360-361,384-391
+src/paperless_tax_export/estimate.py
+  s_b0836905a23abc::t_996345d85f2f3e 239,244-245,251,268,324
+src/paperless_tax_export/export.py
+  s_b0836905a23abc::t_aab78f67ca978f 54-57,93-96,125,184-191,198,207,237,264-267
+src/paperless_tax_export/manifest.py
+  s_b0836905a23abc::t_adf51a718d4783 53,88-89,104
+src/paperless_tax_export/settings.py
+  s_b0836905a23abc::t_e1b999e694c173 26-42,94-95,133-135,151-163
+tests/conftest.py
+  s_b0836905a23abc::t_20a2baca2fccf3 139-148
+tests/test_bills.py
+  s_b0836905a23abc::t_28c0f47c670184 666,901,905
+tests/test_ibkr_index.py
+  s_b0836905a23abc::t_32ba5ab4095477 11,57-62,69-73
+tests/test_manifest.py
+  s_b0836905a23abc::t_3088f955eb1f21 14,92-97,111-115,356
+tests/test_settings.py
+  s_b0836905a23abc::t_4f31288fc2f510 137-160
+tests/test_verify.py
+  s_b0836905a23abc::t_201628f81373e5 81,603
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "485d262cca1b025dc4af038bfda3470b9117870f",
+  "prompts": {},
+  "sessions": {
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
