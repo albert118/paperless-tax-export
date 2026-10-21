@@ -336,7 +336,7 @@ def test_run_success_writes_csvs_and_prints_the_summary(
     assert "review.csv written to" in captured.out
     assert "GST" not in captured.out
     assert "work-use" not in captured.out
-    assert "note: supplier field not configured" in captured.out
+    assert "note: supplier_name is the document correspondent" in captured.out
     assert (output / "deductions.csv").exists()
     assert (output / "review.csv").exists()
     assert not (output / "audit.json").exists()

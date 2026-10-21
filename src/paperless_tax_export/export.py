@@ -251,6 +251,7 @@ def unconfigured_field_notes(settings: Settings) -> tuple[str, ...]:
         notes.append("date field not configured; row date falls back to the document created date")
     if settings.field_supplier is None:
         notes.append(
-            "supplier field not configured; supplier falls back to the document correspondent"
+            "supplier_name is the document correspondent; no separate supplier custom field"
+            " is configured (the default)"
         )
     return tuple(notes)

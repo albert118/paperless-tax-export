@@ -55,6 +55,41 @@ and `raw_date` in `review.csv`, so column positions differ from the current outp
 `category_label`, `claim_type`, `apportionment_basis`, `reimbursed`, `wfh_method`,
 `asset_cost_inc_gst` and `asset_set_id` are deferred to a later revision.
 
+### Review codes
+
+A document goes to `review.csv` when it gets at least one code. `reason_codes` lists every
+code that applies, `;` separated, in the order below. Fix the document in Paperless and
+re-run; a document with no code is written to `deductions.csv`.
+
+| Code | When it applies |
+| --- | --- |
+| `MISSING_DATE` | The date field (`Transaction Date`) has an entry that is empty, null or not an ISO date. A document with no entry at all gets no code: the row date is `created` and `notes_for_agent` says `date from created`. |
+| `MISSING_AMOUNT` | The document has no entry for the amount field (`Transaction Amount`), or the amount field is not configured. |
+| `MISSING_SUPPLIER` | The document has no correspondent (and no value in the optional supplier field, if one is configured). |
+| `AMOUNT_UNPARSEABLE` | The amount entry is empty, null or not a number such as `AUD12.34`, `12.34` or `AUD1,234.50`. |
+| `NEGATIVE_AMOUNT` | The amount is below zero (a credit note or refund), in any currency. |
+| `ZERO_AMOUNT` | The amount is zero, in any currency: almost certainly a missing value or a placeholder. |
+| `DATE_OUT_OF_FY` | The date field holds a date outside the financial year. Selection uses `created`, so this applies to a date field that disagrees with it. |
+| `AMOUNT_OVER_300` | An AUD amount above 300, as a prompt to decide whether the purchase needs asset treatment. Not applied to other currencies. |
+| `DUPLICATE_SUSPECT` | Another document has the same `supplier_name`, date, amount and currency. Every matching document gets the code. |
+| `INCOME_TAGGED` | The document also carries an income tag (`income` or `dividend` by default). |
+
+### Notes printed by `run`
+
+`run` prints a few settings-level lines once per run, as `note:` on stdout. They are
+information, not warnings, and they do not change the exit code.
+
+- `supplier_name is the document correspondent; no separate supplier custom field is
+  configured (the default)`: the `supplier_name` column in `deductions.csv` is the
+  document's correspondent. There is no supplier custom field to configure unless you set
+  `Settings.field_supplier`; `review.csv` shows the same value in `correspondent`.
+- `date field not configured; row date falls back to the document created date` and
+  `amount field not configured; every row gets MISSING_AMOUNT` appear only when those
+  field names are unset.
+
+Per-row information goes in `notes_for_agent`: `amount missing`, `date from created`, and
+the foreign-currency note described above.
+
 CSV format: UTF-8 with BOM, `\r\n` line endings, ISO dates, two-decimal amounts without
 currency symbols or thousands separators, rows sorted by date then document ID, and text
 cells guarded against formula injection. The Paperless document ID is on every row as

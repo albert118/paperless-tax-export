@@ -150,7 +150,8 @@ def test_guard_failure_writes_nothing(monkeypatch: pytest.MonkeyPatch, tmp_path:
 def test_notes_for_unconfigured_fields_are_deterministic() -> None:
     notes = unconfigured_field_notes(Settings())
     assert not any("GST" in note or "work-use" in note for note in notes)
-    assert any("supplier field not configured" in note for note in notes)
+    assert any(note.startswith("supplier_name is the document correspondent") for note in notes)
+    assert not any("not configured" in note and "supplier" in note for note in notes)
     assert not any("amount field not configured" in note for note in notes)
     assert unconfigured_field_notes(Settings()) == notes
 
