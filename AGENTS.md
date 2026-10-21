@@ -29,12 +29,15 @@ classifies the FY documents and writes `deductions.csv` and `review.csv`, plus
 `ibkr-documents.csv` (the IBKR correspondent's FY documents) and `manifest.json`
 (no timestamp, written last). `run --expected-count N` compares N with the FY-scoped
 selected count and `run --dry-run` runs every guard and writes nothing.
+`verify [--output DIR]` re-checks a finished output directory offline: SHA-256 and data-row
+count of every file in `manifest.json`, plus the manifest's own counts (exit 0, 4 on a
+mismatch or missing listed file, 2 on an unusable manifest).
 
 In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_export/`,
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,
 image build, labeler, dependabot) and the docs.
 
-The CLI supports `--help`, `--version`, `audit` and `run`. The library has a
+The CLI supports `--help`, `--version`, `audit`, `run` and `verify`. The library has a
 read-only Paperless client, typed API models, amount and date parsing, and
 financial-year selection. `audit` diagnoses the live instance; `run` drives the
 classification/CSV pipeline.
