@@ -1,0 +1,81 @@
+AGENTS.md
+  s_b0836905a23abc::t_25a92dc1d1d499 79-81
+  s_b0836905a23abc::t_da3be88fd39a1f 28
+  s_b0836905a23abc::t_7872a7b94a7854 29-31,40
+tests/test_ibkr_index.py
+  s_b0836905a23abc::t_0b469b7783a035 1-81,87-93,95-332
+  s_b0836905a23abc::t_b3902fe00cd381 82-86,94
+  s_b0836905a23abc::t_3330ead2c8e129 333-335
+  s_a96f6480598bca::t_08af91549e426b 336-338
+README.md
+  s_b0836905a23abc::t_3e80870aa6c708 18
+  s_b0836905a23abc::t_d2e7d0b305cee3 9-10
+  s_b0836905a23abc::t_53b8031139f271 19,82-97
+src/paperless_tax_export/export.py
+  s_b0836905a23abc::t_25c87202e7c3e7 13,19-22,25,28-34
+  s_b0836905a23abc::t_6ee8893fa90a49 41,45,50,56
+  s_b0836905a23abc::t_f132c108becc03 1,4-6
+  s_b0836905a23abc::t_bf4109d7c3587f 145-150,185,191-194,210-240
+  s_b0836905a23abc::t_31958b5b22b6e5 7-8,23-24,27,40,42-44,52-55,59-65,72-78,129-134,151,154-179,187-190,195-209
+src/paperless_tax_export/cli.py
+  s_b0836905a23abc::t_86ba394e1ab79b 122-123
+  s_b0836905a23abc::t_bf0f97bed77d5b 157-160
+  s_b0836905a23abc::t_e5747ff157025b 271-272
+  s_b0836905a23abc::t_34d46cb3f08c4b 277,280
+  s_b0836905a23abc::t_6b1ac26a04e24d 212
+  s_b0836905a23abc::t_8f8607f8c41234 156
+  s_ffba24ac2f0122::t_331868ea6d1901 165-180,215,268,278-279,281-285
+src/paperless_tax_export/csv_output.py
+  s_b0836905a23abc::t_854a025cdd6909 144
+  s_b0836905a23abc::t_296e27423d5c71 141-143
+  s_b0836905a23abc::t_00ae03b629b15d 145-147
+  s_a96f6480598bca::t_844b319ef643bb 20,56-64,114-133,140,148-157
+  s_b0836905a23abc::t_1c63831742c9e9 78
+  s_ffba24ac2f0122::t_1a3195f6bfa847 80-85,134-139
+src/paperless_tax_export/client.py
+  s_a96f6480598bca::t_7b35bfb20a717d 120-121,125-132,137-140
+src/paperless_tax_export/selection.py
+  s_a96f6480598bca::t_3388405641f14e 90-119
+src/paperless_tax_export/settings.py
+  s_b0836905a23abc::t_01c9ead1850bf9 65-66
+tests/test_manifest.py
+  s_b0836905a23abc::t_8f150868c96f37 1-387
+  s_b0836905a23abc::t_4cf324cdbdb8ae 388-390
+  s_b0836905a23abc::t_fd165645ca7b4c 391
+src/paperless_tax_export/manifest.py
+  s_b0836905a23abc::t_b7226e7391aa0d 1-82
+src/paperless_tax_export/errors.py
+  s_b0836905a23abc::t_849e8f478b13a3 65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "45d8668daae4be0594bc06431f9e9c7c4e6c7910",
+  "prompts": {},
+  "sessions": {
+    "s_a96f6480598bca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ae9cd5e8746c462d3",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_ffba24ac2f0122": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a06f1fbca92c1fc79",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
