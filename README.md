@@ -9,6 +9,8 @@ Both `audit` and `run` talk to Paperless: `audit` reports how the live instance 
 with the settings, and `run` classifies the FY documents and writes `deductions.csv`,
 `review.csv` and `ibkr-documents.csv`.
 
+To run it in Docker next to Paperless-ngx, see [examples/README.md](examples/README.md).
+
 ## What it produces
 
 | File | Contents |

@@ -1,0 +1,43 @@
+# Example: run paperless-tax-export next to an existing Paperless-ngx stack.
+#
+# This file documents only the `tax` service and the external network. It does
+# not define Paperless. Merge the service into your own compose file, or point
+# `docker compose -f` at both files.
+#
+# Requires the first release after v0.1.0 that supports PAPERLESS_TOKEN. The
+# 0.1.0 image reads the token only from `--token-file` and ignores env_file.
+#
+# Run it on demand:
+#   docker compose --profile tax run --rm tax run --expected-count N
+
+services:
+  tax:
+    # Pin a released version. Do not use a floating tag.
+    image: ghcr.io/albert118/paperless-tax-export:<version>
+    # Never starts with `docker compose up`.
+    profiles: ["tax"]
+    restart: "no"
+    # No published ports. The tool only makes outbound GET requests to Paperless.
+    networks:
+      - paperless-net
+    # chmod 600 dotenv file kept OUTSIDE this stack directory and outside any
+    # git checkout. It holds PAPERLESS_TOKEN and PAPERLESS_BASE_URL, e.g.
+    #   PAPERLESS_BASE_URL=http://<paperless-service-name>:8000
+    # The service name and port are yours; this example does not assume them.
+    # Compose reads the file and the container sees real environment variables.
+    env_file:
+      - /path/outside/stack/paperless-tax-export.env
+    volumes:
+      # The image working directory is /app and the CLI writes ./output by
+      # default, so this is where the CSVs and manifest.json land.
+      - /path/to/tax-output:/app/output
+    # The image runs as the non-root user `app`. Under rootless Docker the host
+    # output directory must be writable by that user. The exact ownership or
+    # uid mapping depends on your setup and must be checked; it is not
+    # specified here.
+
+networks:
+  # Replace the name with the network your Paperless-ngx container is on.
+  paperless-net:
+    external: true
+    name: <your-paperless-network-name>
