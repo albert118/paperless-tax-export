@@ -1,0 +1,18 @@
+src/paperless_tax_export/audit.py
+  h_17ff3c2d94101a 200,284,520,532,707-709
+src/paperless_tax_export/cli.py
+  h_17ff3c2d94101a 386
+tests/test_audit.py
+  h_17ff3c2d94101a 90,104,380-412
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9e14b528547fbe0b00587ff263226d6395f8b240",
+  "prompts": {},
+  "humans": {
+    "h_17ff3c2d94101a": {
+      "author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
