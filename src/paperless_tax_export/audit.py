@@ -197,7 +197,7 @@ def run_audit(
     field_amount: str | None,
     field_gst: str | None,
     field_work_use: str | None,
-    field_date: str | None = None,
+    field_date: str | None,
     base_url: str = "",
 ) -> AuditReport:
     """Gather lenient diagnostic findings from the live Paperless instance.
