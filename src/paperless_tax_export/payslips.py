@@ -158,8 +158,7 @@ def _read_hours(
     if definition is None or not document.has_field(definition.id):
         return default
     raw = document.field_value(definition.id)
-    if isinstance(raw, bool):
-        return None
+    # A Paperless boolean arrives as an int (the model coerces it), so it reads as 0 or 1.
     normalised = amount_raw(raw)
     if normalised is None:
         return None
@@ -179,7 +178,7 @@ def build_payslip_section(
     if not usable:
         reason = _not_computed_reason(reading)
         return PayslipSection(
-            rows=_not_computed_rows(reason, wfh_hours),
+            rows=_not_computed_rows(reason, wfh_hours, reading.document_count, unusable_count),
             warnings=warnings,
             document_count=reading.document_count,
             unusable_count=unusable_count,
@@ -280,8 +279,18 @@ def _not_computed_reason(reading: PayslipReading) -> str:
     return "no usable payslips"
 
 
-def _not_computed_rows(reason: str, wfh_hours: Decimal | None) -> tuple[EstimateRow, ...]:
-    rows = [EstimateRow(SECTION, "ceiling", notes=f"not computed: {reason}")]
+def _not_computed_rows(
+    reason: str, wfh_hours: Decimal | None, documents: int, unusable: int
+) -> tuple[EstimateRow, ...]:
+    rows = [
+        EstimateRow(
+            SECTION,
+            "payslips",
+            count=0,
+            notes=f"payslip documents: {documents}; unusable: {unusable}",
+        ),
+        EstimateRow(SECTION, "ceiling", notes=f"not computed: {reason}"),
+    ]
     if wfh_hours is not None:
         rows.append(EstimateRow(SECTION, "wfh_hours_check", notes=f"not computed: {reason}"))
     return tuple(rows)

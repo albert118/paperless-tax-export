@@ -152,7 +152,7 @@ def select_ibkr_documents(
     return True, tuple(ordered)
 
 
-def select_bill_documents(
+def select_documents_by_type(
     client: PaperlessClient,
     document_types: Sequence[DocumentType],
     type_name: str,

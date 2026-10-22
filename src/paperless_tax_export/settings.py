@@ -135,6 +135,11 @@ class Settings:
         if not self.bill_document_type.strip():
             raise SettingsError("bill_document_type must not be empty")
         _validate_bill_kind_tags(self.bill_kind_tags)
+        if self.payslip_document_type == self.bill_document_type:
+            raise SettingsError(
+                f"payslip_document_type and bill_document_type must differ, "
+                f"both are {self.bill_document_type!r}"
+            )
         reserved = {self.deduction_tag, self.asset_reviewed_tag}
         if reserved.intersection(self.bill_kind_tags.values()):
             raise SettingsError(

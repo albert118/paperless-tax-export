@@ -555,6 +555,9 @@ counts as 0, because the extractor may omit zero leave. A leave entry that is nu
 makes the payslip unusable, as does any problem with the dates or ordinary hours. An unusable
 payslip is left out of every sum and counted.
 
+A Paperless boolean on an hours field is already an integer when this tool sees it, so it is
+read as 0 or 1 hour. Keep the hours fields numeric.
+
 A payslip's hours are counted in full even when its period reaches outside the financial year;
 the `payslips` row says how many periods do.
 
@@ -575,7 +578,9 @@ column (currency blank, `notes` starts with `hours`); counts are in `count`.
 | `wfh_hours_check` | Only when `WFH_HOURS` is set: `claimed WFH hours <= ceiling` with the difference, or `exceeds the ceiling by X hours`. |
 
 When nothing can be computed (the type does not exist, a required field does not exist, or no
-payslip is usable) the section is one `ceiling` row with `not computed: <reason>`, plus a
+payslip is usable) the section is a `payslips` row (`count` 0; `notes`: `payslip documents: D;
+unusable: N`, so "no payslips" differs from "all unusable") and one `ceiling` row with
+`not computed: <reason>`, plus a
 `wfh_hours_check` row with the same text when `WFH_HOURS` is set. When a leave field does not
 exist in Paperless, `leave hours`, `ceiling` and the check say `not computed`; the other rows
 stay. Day arithmetic uses calendar dates only.
@@ -592,7 +597,12 @@ The formula assumes Ordinary Hours already includes the leave hours paid, so sub
 leaves hours worked. That is the owner's reading of the payslip layout and needs confirming
 against a real payslip. If Ordinary Hours excludes leave, the ceiling is too low.
 
+`payslip_document_type` must differ from `bill_document_type` (exit 2 otherwise).
+
 ### Warnings and console
+
+Every user without a `salary` document type sees one stderr warning and a `ceiling: not
+computed` row on each run. That is expected, not a fault.
 
 Warnings go to stderr after the bills warnings, in this order: the document type is missing
 (`document type 'salary' not found in Paperless; no payslip hours`); payslip custom fields

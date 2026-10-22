@@ -156,6 +156,13 @@ def test_payslip_document_type_must_not_be_empty() -> None:
         Settings(payslip_document_type=" ")
 
 
+def test_payslip_and_bill_document_types_must_differ() -> None:
+    with pytest.raises(SettingsError, match="payslip_document_type and bill_document_type"):
+        Settings(payslip_document_type="bill")
+    with pytest.raises(SettingsError, match="'invoice'"):
+        Settings(bill_document_type="invoice", payslip_document_type="invoice")
+
+
 def test_payslip_fields_must_have_exactly_the_known_keys() -> None:
     fields = dict(Settings().payslip_fields)
     del fields["public_holiday_hours"]

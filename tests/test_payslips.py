@@ -94,6 +94,7 @@ def make_handler(
     types: list[dict[str, object]] | None = None,
     fields: list[dict[str, object]] | None = None,
     ignore: str | None = None,
+    seen: list[httpx.Request] | None = None,
 ) -> Callable[[httpx.Request], httpx.Response]:
     """Serve the run endpoints; *ignore* names a parameter the 'server' drops on payslip lists."""
     served_types = TYPES if types is None else types
@@ -101,6 +102,8 @@ def make_handler(
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
+        if seen is not None:
+            seen.append(request)
         if path == "/api/tags/":
             return json_response(page_payload([tag_payload(1, "tax deductible")]))
         if path == "/api/custom_fields/":
@@ -235,6 +238,44 @@ def test_periods_outside_the_year_are_clipped_to_it(tmp_path: Path) -> None:
     assert rows["period coverage"]["notes"].startswith(
         "first period start 2025-06-15; last period end 2026-07-15"
     )
+
+
+def test_overlap_is_counted_only_inside_the_year(tmp_path: Path) -> None:
+    documents = [
+        slip(1, start="2026-06-20", end="2026-07-10"),
+        slip(2, start="2026-06-25", end="2026-07-20"),
+    ]
+    run(tmp_path, documents)
+    # 25 to 30 June is 6 days; counting past the year end would give 16.
+    assert ceiling_rows(tmp_path)["overlapping days"]["count"] == "6"
+
+
+def gap_periods(extra_splits: int) -> list[dict[str, object]]:
+    """Two-day periods one day apart from 2 July, then one period to the year end."""
+    documents = []
+    for index in range(4 + extra_splits):
+        first = datetime.date(2025, 7, 2) + datetime.timedelta(days=3 * index)
+        last = first + datetime.timedelta(days=1)
+        documents.append(slip(index + 1, start=first.isoformat(), end=last.isoformat()))
+    final = datetime.date(2025, 7, 2) + datetime.timedelta(days=3 * (4 + extra_splits))
+    documents.append(slip(99, start=final.isoformat(), end="2026-06-30"))
+    return documents
+
+
+def test_exactly_five_gap_ranges_have_no_more_suffix(tmp_path: Path) -> None:
+    run(tmp_path, gap_periods(0))
+    row = ceiling_rows(tmp_path)["coverage gaps"]
+    assert row["count"] == "5"
+    assert "more" not in row["notes"]
+    assert row["notes"].count("..") == 5
+
+
+def test_six_gap_ranges_list_five_and_one_more(tmp_path: Path) -> None:
+    run(tmp_path, gap_periods(1))
+    row = ceiling_rows(tmp_path)["coverage gaps"]
+    assert row["count"] == "6"
+    assert row["notes"].endswith(", and 1 more")
+    assert row["notes"].count("..") == 5
 
 
 def test_a_period_wholly_outside_the_year_leaves_the_year_uncovered(tmp_path: Path) -> None:
@@ -387,7 +428,8 @@ def test_unusable_ids_are_capped_at_twenty(tmp_path: Path) -> None:
 def test_without_usable_payslips_the_section_is_one_not_computed_row(tmp_path: Path) -> None:
     result = run(tmp_path, [slip(1, ordinary="abc")])
     rows = ceiling_rows(tmp_path)
-    assert list(rows) == ["ceiling"]
+    assert list(rows) == ["payslips", "ceiling"]
+    assert rows["payslips"]["notes"] == "payslip documents: 1; unusable: 1"
     assert rows["ceiling"]["notes"] == "not computed: no usable payslips"
     assert result.payslip_ceiling is None
 
@@ -395,7 +437,9 @@ def test_without_usable_payslips_the_section_is_one_not_computed_row(tmp_path: P
 def test_no_payslip_documents_is_not_computed_and_not_a_warning(tmp_path: Path) -> None:
     result = run(tmp_path, [])
     assert payslip_warnings(result) == ()
-    assert ceiling_rows(tmp_path)["ceiling"]["notes"] == "not computed: no usable payslips"
+    rows = ceiling_rows(tmp_path)
+    assert rows["payslips"]["notes"] == "payslip documents: 0; unusable: 0"
+    assert rows["ceiling"]["notes"] == "not computed: no usable payslips"
 
 
 # --- the claimed-hours check -------------------------------------------------
@@ -691,6 +735,21 @@ def test_console_prints_no_payslips_line_without_payslip_documents(
 
 
 # --- privacy -----------------------------------------------------------------
+
+
+def test_the_document_list_request_never_asks_for_content(tmp_path: Path) -> None:
+    seen: list[httpx.Request] = []
+    handler = make_handler(two_payslips(), seen=seen)
+    run_export(Settings(), make_client(handler), output=tmp_path / "out")
+    salary_lists = [
+        request
+        for request in seen
+        if request.url.path == "/api/documents/"
+        and request.url.params.get("document_type__id") == str(SALARY_TYPE)
+    ]
+    assert salary_lists
+    for request in salary_lists:
+        assert "content" not in request.url.params["fields"].split(",")
 
 
 def test_titles_and_content_never_reach_the_console_or_any_file(

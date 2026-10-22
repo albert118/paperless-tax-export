@@ -58,8 +58,8 @@ from paperless_tax_export.payslips import (
 from paperless_tax_export.selection import (
     resolve_fields,
     resolve_tag,
-    select_bill_documents,
     select_documents,
+    select_documents_by_type,
     select_ibkr_documents,
 )
 from paperless_tax_export.settings import Settings
@@ -178,11 +178,11 @@ def run_export(
     investments_found, investment_documents = select_ibkr_documents(
         client, settings.ibkr_correspondent, settings.fy_start, settings.fy_end
     )
-    bills_found, bill_documents = select_bill_documents(
+    bills_found, bill_documents = select_documents_by_type(
         client, document_types, settings.bill_document_type, settings.fy_start, settings.fy_end
     )
     bill_rows = build_bill_rows(bill_documents, context, deduction_tag.id)
-    payslips_found, payslip_documents = select_bill_documents(
+    payslips_found, payslip_documents = select_documents_by_type(
         client, document_types, settings.payslip_document_type, settings.fy_start, settings.fy_end
     )
     payslips = build_payslip_section(
