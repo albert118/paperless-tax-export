@@ -383,6 +383,7 @@ def _run_audit_command(settings: Settings, token: str, args: argparse.Namespace)
             field_amount=settings.field_amount,
             field_gst=settings.field_gst,
             field_work_use=settings.field_work_use,
+            field_date=settings.field_date,
             base_url=settings.base_url,
         )
     print(render(report))

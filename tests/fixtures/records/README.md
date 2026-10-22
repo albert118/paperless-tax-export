@@ -83,11 +83,11 @@ costs one file and no test code.
 - **Compared with `audit-live-2026-10-20T1554Z.json`:** the tag count (48), FY
   count (14), `Transaction Amount` coverage (3 of 14) and IBKR count (24) are
   unchanged. Only the storage path count moved, from 19 to 23.
-- **A gap it shows:** `expected_fields` lists the amount and work-use fields only.
-  `Settings.field_date` is configured (`Transaction Date`) but is not among the
-  expected fields, so the audit would not report a renamed date field as
-  missing. `test_v0_1_0_recording_does_not_list_the_date_field_among_expected_fields`
-  records this as an observation, not a requirement.
+- **A gap it showed (since closed):** this recording's `expected_fields` lists the amount
+  and work-use fields only. `Settings.field_date` was configured (`Transaction Date`) but
+  was not audited, so the audit would not have reported a renamed date field as missing.
+  The live audit now checks it. `test_v0_1_0_recording_does_not_list_the_date_field_among_expected_fields`
+  records that this recording predates the check.
 - The facts above are asserted by `test_audit_fixtures.py`. Two generic checks
   also run on every recording: archived plus none equals the deduction count (when
   the counts exist), and each field's present, null and absent counts sum to it.

@@ -170,8 +170,8 @@ failing:
   IBKR selection is correspondent-only;
 - the configured `--tax-info-tag` (default `tax-information`): exists, document count and
   near-misses, reported with a caveat that it is general tax metadata, not IBKR-specific;
-- whether the expected field names exist (`Transaction Amount` is required; `GST Amount`
-  and `Claimable %` are optional), and the Paperless API/server versions.
+- whether the expected field names exist (`Transaction Amount` is required; `GST Amount`,
+  `Claimable %` and `Transaction Date` are optional), and the Paperless API/server versions.
 
 The audit is a diagnostic, not a gate: missing tags, missing fields and zero coverage
 are findings and the exit code stays 0. Endpoints the token cannot read are recorded in
@@ -272,7 +272,8 @@ It will not run after you edit `deductions.csv` by hand.
   no request, needs no token and creates no file.
 
 The zip holds `deductions/<id>_<date>_<name>.<ext>` and `investments/<id>_<date>_<name>.<ext>`
-for each receipt, plus `deductions.csv` and `investments.csv` (byte-for-byte copies) and
+for each receipt, plus `deductions.csv`, `investments.csv`, `bills.csv` and `estimate.csv`
+(byte-for-byte copies; `review.csv` is not packed) and
 `downloads.json` (set, document id, archive name, bytes, SHA-256 and checksum result per receipt).
 `<name>` is the supplier or correspondent, cut to 60 characters, with anything outside
 letters, digits, `.`, `_` and `-` replaced by `_`; an empty name becomes `unknown`. The id prefix
