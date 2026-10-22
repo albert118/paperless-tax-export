@@ -1,0 +1,34 @@
+tests/test_download.py
+  s_b0836905a23abc::t_675830bc4ff4bb 1003,1006
+  s_b0836905a23abc::t_eb6ad1b6a11129 203,207,212-214
+  s_b0836905a23abc::t_049d8406c27d1a 303-324
+src/paperless_tax_export/download.py
+  s_b0836905a23abc::t_e9dd48c34b6458 86-88
+  s_b0836905a23abc::t_ad6d3ecd2e80dc 233-236,242
+  s_b0836905a23abc::t_357db08969acd9 252-253
+  s_b0836905a23abc::t_02f355f2c2d35e 114
+  s_b0836905a23abc::t_553111db10c607 36-42
+  s_b0836905a23abc::t_c9b792e1b83313 457
+AGENTS.md
+  s_b0836905a23abc::t_f21b18106a0d6b 81-83
+README.md
+  s_b0836905a23abc::t_5861e6c9aaebd9 275-276
+examples/README.md
+  s_b0836905a23abc::t_8b138fe0df1111 47-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "28c657f6222570077e359f478119ad60c3c10279",
+  "prompts": {},
+  "sessions": {
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
