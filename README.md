@@ -272,7 +272,8 @@ It will not run after you edit `deductions.csv` by hand.
   no request, needs no token and creates no file.
 
 The zip holds `deductions/<id>_<date>_<name>.<ext>` and `investments/<id>_<date>_<name>.<ext>`
-for each receipt, plus `deductions.csv` and `investments.csv` (byte-for-byte copies) and
+for each receipt, plus `deductions.csv`, `investments.csv`, `bills.csv` and `estimate.csv`
+(byte-for-byte copies; `review.csv` is not packed) and
 `downloads.json` (set, document id, archive name, bytes, SHA-256 and checksum result per receipt).
 `<name>` is the supplier or correspondent, cut to 60 characters, with anything outside
 letters, digits, `.`, `_` and `-` replaced by `_`; an empty name becomes `unknown`. The id prefix

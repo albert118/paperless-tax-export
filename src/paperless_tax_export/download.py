@@ -33,7 +33,13 @@ from paperless_tax_export.client import (
     PaperlessClient,
 )
 from paperless_tax_export.errors import DownloadError, VerificationError
-from paperless_tax_export.manifest import DEDUCTIONS_FILE, INVESTMENTS_FILE, MANIFEST_FILE
+from paperless_tax_export.manifest import (
+    BILLS_FILE,
+    DEDUCTIONS_FILE,
+    ESTIMATE_FILE,
+    INVESTMENTS_FILE,
+    MANIFEST_FILE,
+)
 from paperless_tax_export.verify import parse_manifest, verify_directory
 
 PACK_NAME = "tax-pack.zip"
@@ -77,6 +83,9 @@ _SOURCES = (
     (INVESTMENTS_SET, INVESTMENTS_FILE, "paperless_document_id", "created", "correspondent"),
 )
 
+# CSVs copied into the pack as they are; they name no documents to fetch.
+_COPY_ONLY_FILES = (BILLS_FILE, ESTIMATE_FILE)
+
 
 @dataclass(frozen=True, slots=True)
 class PlannedDocument:
@@ -102,8 +111,7 @@ class DownloadPlan:
     directory: Path
     documents: tuple[PlannedDocument, ...]
     warnings: tuple[str, ...]
-    deductions_csv: bytes
-    investments_csv: bytes
+    csv_copies: tuple[tuple[str, bytes], ...]
 
     @property
     def unique_ids(self) -> tuple[int, ...]:
@@ -222,13 +230,16 @@ def prepare_download(directory: Path) -> DownloadPlan:
                 contents[file_name], file_name, set_name, (id_column, date_column, name_column)
             )
         )
+    for file_name in _COPY_ONLY_FILES:
+        contents[file_name] = _read_csv_file(directory / file_name)
+        if hashlib.sha256(contents[file_name]).hexdigest() != expected[file_name]:
+            raise VerificationError(f"{file_name} changed after the verify check")
     documents.sort(key=lambda document: (document.set_name, document.document_id))
     return DownloadPlan(
         directory=directory,
         documents=tuple(documents),
         warnings=_plan_warnings(documents),
-        deductions_csv=contents[DEDUCTIONS_FILE],
-        investments_csv=contents[INVESTMENTS_FILE],
+        csv_copies=tuple(sorted(contents.items())),
     )
 
 
@@ -238,7 +249,8 @@ def _manifest_hashes(directory: Path) -> dict[str, str]:
         manifest = parse_manifest((directory / MANIFEST_FILE).read_bytes())
     except OSError as exc:
         raise DownloadError(f"cannot read {MANIFEST_FILE}: {exc.strerror or 'I/O error'}") from exc
-    return {name: manifest.outputs[name].sha256 for name in (DEDUCTIONS_FILE, INVESTMENTS_FILE)}
+    names = (*(source[1] for source in _SOURCES), *_COPY_ONLY_FILES)
+    return {name: manifest.outputs[name].sha256 for name in names}
 
 
 def _read_csv_file(path: Path) -> bytes:
@@ -442,8 +454,7 @@ def _write_pack(plan: DownloadPlan, entries: list[tuple[PackEntry, Path]]) -> tu
     """Build the zip in a temp file beside the target and ``os.replace`` it in place."""
     downloads_json = render_downloads_json([entry for entry, _ in entries])
     members: dict[str, bytes | Path] = {entry.arcname: path for entry, path in entries}
-    members[DEDUCTIONS_FILE] = plan.deductions_csv
-    members[INVESTMENTS_FILE] = plan.investments_csv
+    members.update(plan.csv_copies)
     members[DOWNLOADS_FILE] = downloads_json
     target = plan.directory / PACK_NAME
     zip_sha256 = write_atomically(target, partial(_write_zip, members=members))

@@ -44,7 +44,8 @@ docker compose --profile tax run --rm tax download
 `N` is the number of documents the Paperless admin view shows for the tag with the
 financial-year `created` filter applied. `--dry-run` runs every guard and writes
 nothing. `download` verifies the run output, then writes `tax-pack.zip` (the original
-files, both CSVs and `downloads.json`, not encrypted) into the same directory.
+files, the deductions, investments, bills and estimate CSVs, and `downloads.json`, not
+encrypted) into the same directory.
 
 ## Output
 
