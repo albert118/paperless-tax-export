@@ -9,6 +9,7 @@ Both `audit` and `run` talk to Paperless: `audit` reports how the live instance 
 with the settings, and `run` classifies the FY documents and writes `deductions.csv`,
 `review.csv` and `investments.csv`.
 `verify` talks to nothing: it re-checks a finished output directory against its manifest.
+`download` verifies a finished run, then fetches the original files from Paperless into one zip.
 
 To run it in Docker next to Paperless-ngx, see [examples/README.md](examples/README.md).
 
@@ -248,6 +249,84 @@ rejects it with exit 2. Re-run `run` to produce a current manifest.
 lacks it and exits 2, naming it. It has no file to compare with, so `verify` only checks that
 it is a non-negative integer.
 
+### Download the originals
+
+```sh
+uv run paperless-tax-export download --output output --token-file secrets/paperless-token.txt
+```
+
+Order: `run`, `verify`, `download`, then hand-edit the CSVs. `download` runs the `verify` check
+first and stops if it fails, so the document ids come from the CSVs exactly as `run` wrote them.
+It will not run after you edit `deductions.csv` by hand.
+
+- It reads `paperless_document_id`, the date and the supplier (or, for `investments.csv`, the
+  `created` date and the correspondent) from `deductions.csv` and `investments.csv`. `review.csv`
+  documents are not downloaded.
+- For each document it fetches the original upload (`?original=true`, not the archived PDF) with
+  GET requests only, streamed to a temporary file, and writes `tax-pack.zip` into `--output`.
+- Token and base URL resolve like `audit` and `run`: `--token-file`, `PAPERLESS_TOKEN`, the
+  dotenv file from `--env-file`, then `secrets/paperless-token.txt`; `--base-url` or
+  `PAPERLESS_BASE_URL`.
+- `--require-checksum` fails the run when any document has no usable stored checksum.
+- `--dry-run` runs the verify check, prints the planned entries and counts, and stops. It makes
+  no request, needs no token and creates no file.
+
+The zip holds `deductions/<id>_<date>_<name>.<ext>` and `investments/<id>_<date>_<name>.<ext>`
+for each receipt, plus `deductions.csv` and `investments.csv` (byte-for-byte copies) and
+`downloads.json` (set, document id, archive name, bytes, SHA-256 and checksum result per receipt).
+`<name>` is the supplier or correspondent, cut to 60 characters, with anything outside
+letters, digits, `.`, `_` and `-` replaced by `_`; an empty name becomes `unknown`. The id prefix
+keeps every name unique. A document in both CSVs is a bug: a warning names it and a copy goes in
+both folders. The extension comes from the response file name, then the stored original file
+name, then the content type; if none gives one the file is `.bin` and a warning names the id.
+
+The zip uses no compression, fixed timestamps and sorted entries, so the same Paperless data
+gives the same bytes. It is **not encrypted** and holds your real receipts: keep it out of git
+(`output/` is ignored) and handle it like the originals.
+
+The run is all or nothing. If any document fails, the command exits non-zero, names the document
+ids (never titles), and writes no zip and no partial file; a `tax-pack.zip` from an earlier run
+is left untouched. The zip is written to a temporary file and renamed into place only after every
+document succeeded.
+
+Each download is compared with Paperless's stored `checksum`: a 32-hex value as MD5, a 64-hex
+value as SHA-256. A difference fails the document. An empty download always fails. When the stored
+checksum is missing or has another length, only the size checks apply (non-empty, and equal to
+`Content-Length` when sent) and `downloads.json` records `"checksum_result": "unchecked"`.
+
+Unchecked downloads are reported, not hidden. The command prints `checksum: N match, M unchecked`
+and, when M is above zero, a warning on stderr listing the document ids. `--require-checksum`
+turns an unchecked document into a failure: exit 4, no zip, and one message that lists the ids
+(the first 20, then `and N more`). Every document is still downloaded first, so one run reports them all. The stderr warning caps its id list the same way; `downloads.json` keeps every entry.
+Without the flag the run stays tolerant. With it, a stored checksum that matches still succeeds.
+
+Practical limits:
+
+- Scratch space. Each original is staged in the system temporary directory and then copied into
+  the zip, so a run needs about twice the total size of the originals free: once in the temp
+  directory, once in `--output`. In a container, `/tmp` can be small or RAM-backed; size it or
+  point `TMPDIR` at a volume with room.
+- Interrupts. Ctrl-C and ordinary errors remove the temporary files. A hard kill, including
+  SIGTERM from `docker stop`, can leave `.tax-pack-*.tmp` in `--output` and a
+  `paperless-tax-export-*` directory in the temp directory. Both hold real receipts; delete them.
+- File mode. The zip is written through a temporary file created with mode 0600 on POSIX. On a
+  container bind mount it can be unreadable from the host user until you change its mode or owner.
+- The CSV bytes packed are checked against the manifest hash after they are read, so a file
+  changed between the verify check and the read is refused (exit 4).
+- Ids are limited to 18 digits, the date part of a name to 20 characters and the name part to 60.
+- If both CSVs list no documents, the pack holds only the CSVs and `downloads.json`; the command
+  exits 0 with a warning on stderr.
+
+Exit codes: 0 on success; 2 for an unusable manifest or settings; 3 for an HTTP or network
+failure (including a 401 or 403 on a document); 4 when the verify check fails or a download fails
+its integrity check.
+
+Not yet confirmed against a live Paperless 3.3.2: that the view-only token may download originals
+(a 403 means the token needs more permission), that the response carries a `Content-Disposition`
+file name, and which hash `checksum` holds and whether the API returns it for a document. The
+command copes with each being absent (`.bin`/fallbacks, `unchecked`) but a 403 stops the run.
+`verify` does not check the zip yet.
+
 ## The Paperless token
 
 The token is never committed and never pasted into a file that is tracked by git.
@@ -260,7 +339,7 @@ The token is never committed and never pasted into a file that is tracked by git
 
 ### Configuration sources
 
-`audit` and `run` read the token and base URL from the first of these that is set:
+`audit`, `run` and `download` read the token and base URL from the first of these that is set:
 
 1. the command-line flag: `--token-file PATH` or `--base-url URL`;
 2. a real environment variable: `PAPERLESS_TOKEN` (the token itself) or

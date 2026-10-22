@@ -17,6 +17,15 @@ from pathlib import Path
 from paperless_tax_export import __version__
 from paperless_tax_export.audit import dump_json, render, run_audit
 from paperless_tax_export.client import PaperlessClient
+from paperless_tax_export.download import (
+    DEDUCTIONS_SET,
+    INVESTMENTS_SET,
+    PACK_NAME,
+    DownloadPlan,
+    execute_download,
+    format_id_list,
+    prepare_download,
+)
 from paperless_tax_export.env_config import (
     EnvSources,
     build_sources,
@@ -249,6 +258,62 @@ def _build_parser() -> argparse.ArgumentParser:
         default=output_default,
         help=f"directory holding manifest.json and the output files (default: {output_default}/)",
     )
+    download_parser = subparsers.add_parser(
+        "download",
+        help="download the originals of a verified output directory into one zip",
+        description=(
+            "Verify the output directory against manifest.json, then download the"
+            " original upload of every document in deductions.csv and investments.csv"
+            f" and write {PACK_NAME} (the receipts, both CSVs and downloads.json)."
+            " All or nothing: any failed download or integrity check writes no zip."
+            " Run it before hand-editing the CSVs. The zip is not encrypted and holds"
+            " the real receipts. Read-only toward Paperless (GET requests only)."
+        ),
+    )
+    download_parser.add_argument(
+        "--output",
+        type=Path,
+        default=output_default,
+        help=f"run output directory; the zip is written here (default: {output_default}/)",
+    )
+    download_parser.add_argument(
+        "--base-url",
+        default=None,
+        help=(f"Paperless base URL; overrides PAPERLESS_BASE_URL (default: {settings.base_url})"),
+    )
+    download_parser.add_argument(
+        "--token-file",
+        type=Path,
+        default=None,
+        help=(
+            "file holding the Paperless API token; overrides PAPERLESS_TOKEN."
+            " There is no --token flag, so the token never appears in the process"
+            f" list (default: PAPERLESS_TOKEN, else {settings.token_file})"
+        ),
+    )
+    download_parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help=(
+            "dotenv file supplying PAPERLESS_TOKEN and PAPERLESS_BASE_URL; real"
+            " environment variables win over its entries. Equivalent to setting"
+            " PAPERLESS_ENV_FILE. A .env in the working directory is never loaded"
+        ),
+    )
+    download_parser.add_argument(
+        "--require-checksum",
+        action="store_true",
+        help=(
+            "fail (exit 4, no zip) when a document has no usable Paperless checksum to"
+            " compare with; by default such documents are packed and reported as unchecked"
+        ),
+    )
+    download_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="after the verify gate, print the planned entries and counts; no request, no file",
+    )
     return parser
 
 
@@ -267,6 +332,8 @@ def _dispatch(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         )
     if args.command == "verify":
         return _run_verify_command(args)
+    if args.command == "download":
+        return _run_download_command(args)
     parser.error(f"unknown command {args.command!r}")
 
 
@@ -401,3 +468,51 @@ def _run_verify_command(args: argparse.Namespace) -> int:
     if not report.ok:
         raise VerificationError(f"{report.problems} verification problem(s) in {args.output}")
     return EXIT_OK
+
+
+def _run_download_command(args: argparse.Namespace) -> int:
+    """Gate on verify, then plan, then (unless ``--dry-run``) download and write the zip.
+
+    The gate and the plan run before the token is resolved, so a failed gate makes
+    no request and a dry run needs no token.
+    """
+    plan = prepare_download(args.output)
+    for warning in plan.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if args.dry_run:
+        _print_dry_run(plan)
+        return EXIT_OK
+    sources = build_sources(args.env_file, os.environ)
+    settings = Settings(base_url=resolve_base_url(args.base_url, Settings().base_url, sources))
+    token = resolve_token(args.token_file, settings.token_file, sources)
+    with PaperlessClient(
+        settings.base_url,
+        token,
+        page_size=settings.page_size,
+        timeout=settings.timeout_seconds,
+    ) as client:
+        result = execute_download(plan, client, require_checksum=args.require_checksum)
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if result.unchecked_ids:
+        ids = format_id_list(result.unchecked_ids)
+        print(
+            f"warning: {len(result.unchecked_ids)} document(s) were not checked against a"
+            f" Paperless checksum (only size checks applied): {ids}",
+            file=sys.stderr,
+        )
+    for set_name in (DEDUCTIONS_SET, INVESTMENTS_SET):
+        print(f"{set_name}: {result.count_for(set_name)} receipts")
+    print(f"checksum: {result.matched_count} match, {len(result.unchecked_ids)} unchecked")
+    print(f"{PACK_NAME} written to {result.pack_path} ({len(result.entries)} receipts)")
+    print(f"sha256 {result.zip_sha256}")
+    return EXIT_OK
+
+
+def _print_dry_run(plan: DownloadPlan) -> None:
+    for document in plan.documents:
+        print(f"{document.set_name} {document.document_id} {document.stem}")
+    for set_name in (DEDUCTIONS_SET, INVESTMENTS_SET):
+        count = sum(1 for document in plan.documents if document.set_name == set_name)
+        print(f"{set_name}: {count} receipts")
+    print(f"dry run: {len(plan.unique_ids)} documents would be downloaded; nothing was written")

@@ -38,11 +38,13 @@ docker compose --profile tax run --rm tax --version
 docker compose --profile tax run --rm tax audit
 docker compose --profile tax run --rm tax run --dry-run
 docker compose --profile tax run --rm tax run --expected-count N
+docker compose --profile tax run --rm tax download
 ```
 
 `N` is the number of documents the Paperless admin view shows for the tag with the
 financial-year `created` filter applied. `--dry-run` runs every guard and writes
-nothing.
+nothing. `download` verifies the run output, then writes `tax-pack.zip` (the original
+files, both CSVs and `downloads.json`, not encrypted) into the same directory.
 
 ## Output
 
@@ -56,3 +58,4 @@ Files go to the mounted directory (`/app/output` in the container):
   work-from-home scenarios from the bills.
 - `manifest.json`: parameters, versions, counts and file hashes.
 - `audit.json`: written by `audit`.
+- `tax-pack.zip`: written by `download`; holds the real receipts.

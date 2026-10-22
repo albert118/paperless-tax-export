@@ -7,7 +7,7 @@ All client tests stay offline by wiring ``httpx.MockTransport`` into
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 import httpx
 import pytest
@@ -196,3 +196,36 @@ def document_payload(
         "custom_fields": custom_fields or [],
         "archived_file_name": archived_file_name,
     }
+
+
+class ChunkedStream(httpx.SyncByteStream):
+    """A response body served in fixed-size chunks, counting how many were pulled.
+
+    ``chunks_served`` lets a test show that a client consumed the body chunk by
+    chunk instead of reading it whole.
+    """
+
+    def __init__(self, body: bytes, chunk_size: int = 8192) -> None:
+        self._body = body
+        self._chunk_size = chunk_size
+        self.chunks_served = 0
+
+    def __iter__(self) -> Iterator[bytes]:
+        for start in range(0, len(self._body), self._chunk_size):
+            self.chunks_served += 1
+            yield self._body[start : start + self._chunk_size]
+
+
+def streamed_response(
+    body: bytes,
+    *,
+    status_code: int = 200,
+    headers: dict[str, str] | None = None,
+    chunk_size: int = 8192,
+) -> httpx.Response:
+    """Build a response whose body is a :class:`ChunkedStream`."""
+    return httpx.Response(
+        status_code,
+        headers=headers or {},
+        stream=ChunkedStream(body, chunk_size),
+    )

@@ -10,8 +10,13 @@ configure.
 
 from __future__ import annotations
 
+import hashlib
+import re
+from dataclasses import dataclass
+from pathlib import Path
 from types import TracebackType
 from typing import Any, TypeVar
+from urllib.parse import unquote
 
 import httpx
 from pydantic import BaseModel, ConfigDict, TypeAdapter
@@ -19,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 from paperless_tax_export import __version__
 from paperless_tax_export.errors import (
     ApiVersionError,
+    DownloadError,
     HttpStatusError,
     PaginationIntegrityError,
     TaxExportAuthError,
@@ -43,6 +49,74 @@ _DOCUMENT_FIELDS = (
     "id,title,created,modified,tags,correspondent,document_type,"
     "storage_path,custom_fields,archived_file_name"
 )
+
+
+# Originals can be large scans; the JSON calls' 30 second timeout is too short for them.
+# httpx applies this per read, not to the whole transfer.
+DOWNLOAD_TIMEOUT_SECONDS = 300.0
+DOWNLOAD_CONNECT_TIMEOUT_SECONDS = 30.0
+_DOWNLOAD_CHUNK_BYTES = 64 * 1024
+_DOCUMENT_FILE_FIELDS = "id,checksum,original_file_name"
+
+_QUOTED_PAIR_RE = re.compile(r"\\(.)")
+_DISPOSITION_STAR_RE = re.compile(r"(?:^|;)\s*filename\*\s*=\s*([^;]+)", re.IGNORECASE)
+_DISPOSITION_PLAIN_RE = re.compile(
+    r'(?:^|;)\s*filename\s*=\s*("(?:[^"\\]|\\.)*"|[^;]+)', re.IGNORECASE
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentFileInfo:
+    """What Paperless stores about a document's original file; either may be ``None``."""
+
+    document_id: int
+    checksum: str | None
+    original_file_name: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DownloadedOriginal:
+    """The facts measured while an original streamed to disk.
+
+    ``content_length`` is ``None`` when the header is absent, unparseable or the
+    body was content-encoded (the header then counts encoded bytes).
+    """
+
+    document_id: int
+    size: int
+    sha256: str
+    md5: str
+    file_name: str | None
+    content_type: str | None
+    content_length: int | None
+
+
+def parse_content_disposition_filename(header: str | None) -> str | None:
+    """The file name in a ``Content-Disposition`` value, or ``None``.
+
+    ``filename*=UTF-8''...`` (RFC 5987, percent-decoded) wins over ``filename="..."``.
+    Anything unparseable gives ``None``; the caller falls back to other sources.
+    """
+    if not header:
+        return None
+    star = _DISPOSITION_STAR_RE.search(header)
+    if star is not None:
+        parts = star.group(1).strip().split("'", 2)
+        if len(parts) == 3:
+            charset = parts[0] or "utf-8"
+            try:
+                decoded = unquote(parts[2], encoding=charset, errors="replace")
+            except LookupError:
+                decoded = unquote(parts[2], errors="replace")
+            if decoded:
+                return decoded
+    plain = _DISPOSITION_PLAIN_RE.search(header)
+    if plain is None:
+        return None
+    value = plain.group(1).strip()
+    if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+        value = _QUOTED_PAIR_RE.sub(lambda match: match.group(1), value[1:-1])
+    return value or None
 
 
 class _CountPage(BaseModel):
@@ -159,6 +233,73 @@ class PaperlessClient:
         )
         page = _CountPage.model_validate(response.json())
         return page.count
+
+    def get_document_file_info(self, document_id: int) -> DocumentFileInfo:
+        """The stored checksum and original file name of one document, from one GET."""
+        response = self._send(
+            "GET",
+            f"/api/documents/{document_id}/",
+            params={"fields": _DOCUMENT_FILE_FIELDS},
+        )
+        self._raise_for_document_status(response, document_id)
+        try:
+            payload: object = response.json()
+        except ValueError as exc:
+            raise DownloadError(f"document {document_id}: the metadata was not valid JSON") from exc
+        if not isinstance(payload, dict):
+            raise DownloadError(f"document {document_id}: the metadata was not a JSON object")
+        checksum = payload.get("checksum")
+        original_name = payload.get("original_file_name")
+        return DocumentFileInfo(
+            document_id=document_id,
+            checksum=checksum if isinstance(checksum, str) else None,
+            original_file_name=original_name if isinstance(original_name, str) else None,
+        )
+
+    def download_original(self, document_id: int, dest_path: Path) -> DownloadedOriginal:
+        """Stream the original upload of one document into *dest_path*.
+
+        The body is written in chunks and never held whole. SHA-256 and MD5 (the
+        two hashes Paperless has used for ``checksum``) are computed on the way.
+        A non-2xx status, a transport failure or a timeout raises one of the
+        client errors, naming the document id and status only.
+        """
+        sha256 = hashlib.sha256()
+        md5 = hashlib.md5(usedforsecurity=False)
+        size = 0
+        try:
+            with self._client.stream(
+                "GET",
+                f"/api/documents/{document_id}/download/",
+                params={"original": "true"},
+                headers={"Accept": "*/*", "Accept-Encoding": "identity"},
+                timeout=httpx.Timeout(
+                    DOWNLOAD_TIMEOUT_SECONDS, connect=DOWNLOAD_CONNECT_TIMEOUT_SECONDS
+                ),
+            ) as response:
+                self._raise_for_document_status(response, document_id)
+                with dest_path.open("wb") as handle:
+                    for chunk in response.iter_bytes(_DOWNLOAD_CHUNK_BYTES):
+                        handle.write(chunk)
+                        sha256.update(chunk)
+                        md5.update(chunk)
+                        size += len(chunk)
+                headers = response.headers
+        except httpx.TimeoutException as exc:
+            raise TransportError(f"document {document_id}: the Paperless server timed out") from exc
+        except httpx.HTTPError as exc:
+            raise TransportError(
+                f"document {document_id}: transfer failed ({type(exc).__name__})"
+            ) from exc
+        return DownloadedOriginal(
+            document_id=document_id,
+            size=size,
+            sha256=sha256.hexdigest(),
+            md5=md5.hexdigest(),
+            file_name=parse_content_disposition_filename(headers.get("Content-Disposition")),
+            content_type=headers.get("Content-Type"),
+            content_length=_plain_content_length(headers),
+        )
 
     def list_tags(self) -> list[Tag]:
         return self._paginate("/api/tags/", TypeAdapter(Page[Tag]))
@@ -350,3 +491,24 @@ class PaperlessClient:
         raise HttpStatusError(
             f"Paperless returned HTTP {status} for {response.request.method} {url}{redirected}"
         )
+
+    def _raise_for_document_status(self, response: httpx.Response, document_id: int) -> None:
+        """Map a non-2xx status to a client error naming the document id and status only."""
+        if response.is_success:
+            return
+        status = response.status_code
+        if status in (401, 403):
+            raise TaxExportAuthError(
+                f"document {document_id}: Paperless refused the request (HTTP {status})"
+            )
+        raise HttpStatusError(f"document {document_id}: Paperless returned HTTP {status}")
+
+
+def _plain_content_length(headers: httpx.Headers) -> int | None:
+    encoding = headers.get("Content-Encoding", "identity").strip().lower()
+    if encoding not in ("", "identity"):
+        return None
+    raw = headers.get("Content-Length")
+    if raw is None or not raw.strip().isdecimal():
+        return None
+    return int(raw)
