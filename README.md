@@ -296,7 +296,8 @@ checksum is missing or has another length, only the size checks apply (non-empty
 
 Unchecked downloads are reported, not hidden. The command prints `checksum: N match, M unchecked`
 and, when M is above zero, a warning on stderr listing the document ids. `--require-checksum`
-turns an unchecked document into a failure: exit 4, no zip, and a message that names the id only.
+turns an unchecked document into a failure: exit 4, no zip, and one message that lists the ids
+(the first 20, then `and N more`). Every document is still downloaded first, so one run reports them all. The stderr warning caps its id list the same way; `downloads.json` keeps every entry.
 Without the flag the run stays tolerant. With it, a stored checksum that matches still succeeds.
 
 Practical limits:

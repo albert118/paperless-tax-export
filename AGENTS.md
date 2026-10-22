@@ -75,7 +75,7 @@ six fields above. It must not read, print or write any pay amount, tax figure or
 a payslip, and a payslip title must never appear in stdout, stderr, any CSV or the manifest
 (warnings name document ids only). Test fixtures use invented values.
 
-`download [--output DIR] [--dry-run]` gates on the same check, then fetches the original file of each
+`download [--output DIR] [--env-file PATH] [--base-url URL] [--token-file PATH] [--require-checksum] [--dry-run]` gates on the same check, then fetches the original file of each
 `deductions.csv` and `investments.csv` document (GET only, streamed, checked against Paperless's
 `checksum` where usable) and writes `tax-pack.zip` all or nothing through a temp file and
 `os.replace`; the live facts it assumes are unverified (see the README).

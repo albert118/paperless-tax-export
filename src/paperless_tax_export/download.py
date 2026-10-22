@@ -22,7 +22,7 @@ import re
 import shutil
 import tempfile
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path, PurePosixPath
@@ -47,6 +47,7 @@ CHECKSUM_UNCHECKED = "unchecked"
 _MAX_NAME_CHARS = 60
 _MAX_DATE_CHARS = 20
 _MAX_ID_DIGITS = 18
+_MAX_LISTED_IDS = 20
 _MAX_EXTENSION_CHARS = 10
 _UNKNOWN = "unknown"
 _FALLBACK_EXTENSION = ".bin"
@@ -147,6 +148,13 @@ class DownloadResult:
 
 
 # --- names -------------------------------------------------------------------
+
+
+def format_id_list(ids: Sequence[int], limit: int = _MAX_LISTED_IDS) -> str:
+    """Comma-separated ids in order, the first *limit* then ``and N more``."""
+    shown = ", ".join(str(document_id) for document_id in ids[:limit])
+    extra = len(ids) - limit
+    return f"{shown} and {extra} more" if extra > 0 else shown
 
 
 def sanitise_name(value: str, *, limit: int | None = None) -> str:
@@ -340,7 +348,8 @@ def execute_download(
 ) -> DownloadResult:
     """Download every planned original and write ``tax-pack.zip`` all or nothing.
 
-    With *require_checksum*, a document with no usable stored checksum fails the run.
+    With *require_checksum*, every document is still downloaded first; then one error lists
+    all documents with no usable stored checksum and nothing is written.
     """
     warnings: list[str] = []
     try:
@@ -371,11 +380,6 @@ def _fetch_all(
         destination = scratch / f"{document_id}.download"
         downloaded = client.download_original(document_id, destination)
         result = check_integrity(info, downloaded)
-        if require_checksum and result == CHECKSUM_UNCHECKED:
-            raise DownloadError(
-                f"document {document_id}: no usable Paperless checksum to compare with"
-                " (--require-checksum)"
-            )
         extension = derive_extension(
             downloaded.file_name, info.original_file_name, downloaded.content_type
         )
@@ -390,6 +394,12 @@ def _fetch_all(
             size=downloaded.size,
             sha256=downloaded.sha256,
             checksum_result=result,
+        )
+    unchecked = [i for i, item in fetched.items() if item.checksum_result == CHECKSUM_UNCHECKED]
+    if require_checksum and unchecked:
+        raise DownloadError(
+            f"no usable Paperless checksum to compare with (--require-checksum) for"
+            f" {len(unchecked)} document(s): {format_id_list(unchecked)}"
         )
     return fetched
 

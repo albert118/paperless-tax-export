@@ -864,7 +864,8 @@ def test_require_checksum_fails_on_an_unchecked_document_and_writes_no_zip(
     code = _download(output, tmp_path, monkeypatch, FakePaperless(served), "--require-checksum")
     assert code == 4
     err = capsys.readouterr().err
-    assert "document 4: no usable Paperless checksum" in err
+    assert "no usable Paperless checksum" in err
+    assert "1 document(s): 4" in err
     assert "Interactive" not in err
     assert (output / "tax-pack.zip").read_bytes() == b"previous pack"
     assert _names(output) == before
@@ -972,3 +973,111 @@ def test_an_empty_pack_warns_on_stderr_and_still_succeeds(
         "downloads.json",
         "investments.csv",
     ]
+
+
+# --- nits: every unchecked id, id forms, overlap ------------------------------
+
+
+def _many_documents(tmp_path: Path, count: int) -> tuple[Path, dict[int, Served]]:
+    ids = range(100, 100 + count)
+    directory = _craft_deductions(tmp_path, "many", [[i, "2025-10-01", "A"] for i in ids])
+    return directory, {i: Served(b"%PDF", checksum=None) for i in ids}
+
+
+def test_require_checksum_reports_every_unchecked_id_once_capped_at_twenty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    directory, served = _many_documents(tmp_path, 25)
+    fake = FakePaperless(served)
+    assert _download(directory, tmp_path, monkeypatch, fake, "--require-checksum") == 4
+    err = capsys.readouterr().err
+    assert err.count("error:") == 1
+    assert "25 document(s)" in err
+    assert ", ".join(str(i) for i in range(100, 120)) + " and 5 more" in err
+    assert "120" not in err
+    assert fake.downloads_of(124) == 1
+    assert not (directory / "tax-pack.zip").exists()
+
+
+def test_the_unchecked_warning_caps_its_ids_but_downloads_json_keeps_all(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    directory, served = _many_documents(tmp_path, 25)
+    assert _download(directory, tmp_path, monkeypatch, FakePaperless(served)) == 0
+    captured = capsys.readouterr()
+    assert "checksum: 0 match, 25 unchecked" in captured.out.splitlines()
+    assert "25 document(s) were not checked" in captured.err
+    assert "and 5 more" in captured.err
+    assert "124" not in captured.err
+    downloads = json.loads(_read_zip(directory / "tax-pack.zip")["downloads.json"])
+    assert len(downloads) == 25
+    assert {e["checksum_result"] for e in downloads} == {"unchecked"}
+
+
+def test_a_checksum_mismatch_fails_with_or_without_require_checksum(
+    output: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    served = default_served()
+    served[1].checksum = md5(b"other")
+    code = _download(output, tmp_path, monkeypatch, FakePaperless(served), "--require-checksum")
+    assert code == 4
+    assert "document 1: the download does not match its checksum" in capsys.readouterr().err
+    assert not (output / "tax-pack.zip").exists()
+
+
+def test_require_checksum_is_ignored_by_dry_run(
+    output: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = FakePaperless(default_served())
+    _install(monkeypatch, fake)
+    argv = ["download", "--output", str(output), "--dry-run", "--require-checksum"]
+    assert main(argv) == 0
+    assert fake.requests == []
+    assert "dry run: 2 documents" in capsys.readouterr().out
+
+
+def test_the_empty_pack_warning_also_shows_in_dry_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    directory = _craft_deductions(tmp_path, "empty-dry", [])
+    assert main(["download", "--output", str(directory), "--dry-run"]) == 0
+    assert "list no documents" in capsys.readouterr().err
+    assert not (directory / "tax-pack.zip").exists()
+
+
+def test_id_zero_and_an_eighteen_digit_id_are_accepted(tmp_path: Path) -> None:
+    big = "9" * 18
+    directory = _craft_deductions(
+        tmp_path, "edge-ids", [["0", "2025-10-01", "A"], [big, "2025-10-01", "A"]]
+    )
+    ids = [document.document_id for document in prepare_download(directory).documents]
+    assert ids == [0, int(big)]
+
+
+def test_a_leading_zero_id_duplicates_the_plain_id(tmp_path: Path) -> None:
+    directory = _craft_deductions(
+        tmp_path, "zero-dup", [["01", "2025-10-01", "A"], ["1", "2025-10-02", "B"]]
+    )
+    with pytest.raises(DownloadError, match="document 1 more than once"):
+        prepare_download(directory)
+
+
+def test_non_ascii_digits_are_not_a_document_id(tmp_path: Path) -> None:
+    directory = _craft_deductions(tmp_path, "arabic", [["١٢", "2025-10-01", "A"]])
+    with pytest.raises(DownloadError, match="not a document id"):
+        prepare_download(directory)
+
+
+def test_the_same_unchecked_document_in_both_sets_is_counted_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    directory = _overlap_directory(tmp_path)
+    served = {5: Served(b"%PDF both", checksum=None)}
+    assert _download(directory, tmp_path, monkeypatch, FakePaperless(served)) == 0
+    captured = capsys.readouterr()
+    assert "checksum: 0 match, 1 unchecked" in captured.out.splitlines()
+    assert "1 document(s) were not checked" in captured.err
+    assert captured.err.count("warning: 1 document(s)") == 1

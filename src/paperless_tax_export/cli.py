@@ -23,6 +23,7 @@ from paperless_tax_export.download import (
     PACK_NAME,
     DownloadPlan,
     execute_download,
+    format_id_list,
     prepare_download,
 )
 from paperless_tax_export.env_config import (
@@ -494,7 +495,7 @@ def _run_download_command(args: argparse.Namespace) -> int:
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
     if result.unchecked_ids:
-        ids = ", ".join(str(document_id) for document_id in result.unchecked_ids)
+        ids = format_id_list(result.unchecked_ids)
         print(
             f"warning: {len(result.unchecked_ids)} document(s) were not checked against a"
             f" Paperless checksum (only size checks applied): {ids}",
