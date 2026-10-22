@@ -230,6 +230,20 @@ def test_successful_run_writes_audit_json_and_returns_zero(
     assert data["api_version"] == "10"
 
 
+def test_audit_reports_the_configured_date_field_in_audit_json(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    token_file = _write_token(tmp_path)
+    _install_mock_client(monkeypatch, _audit_handler())
+    output = tmp_path / "out"
+    assert main(["audit", "--token-file", str(token_file), "--output", str(output)]) == 0
+    data = json.loads((output / "audit.json").read_text(encoding="utf-8"))
+    by_name = {info["name"]: info for info in data["expected_fields"]}
+    assert "Transaction Date" in by_name
+    assert by_name["Transaction Date"]["required"] is False
+
+
 def test_partial_read_failure_with_visible_things_elsewhere_returns_zero(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

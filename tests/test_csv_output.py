@@ -30,11 +30,7 @@ def make_row(
     title: str = "Grocery run",
     correspondent: str = "Coles",
     created: str = "2025-10-01",
-    modified: str = "2025-10-01",
-    tags: tuple[str, ...] = (),
     codes: tuple[ReviewCode, ...] = (),
-    raw_amount: str = "",
-    raw_date: str = "",
 ) -> ClassifiedRow:
     """A fully populated, accepted-style row with per-test overrides."""
     return ClassifiedRow(
@@ -45,15 +41,11 @@ def make_row(
         amount_inc_gst=amount,
         currency=currency,
         document_type=document_type,
-        document_modified=modified,
         notes_for_agent=notes,
         title=title,
         correspondent=correspondent,
         created=created,
-        tags=tags,
         reason_codes=codes,
-        raw_amount=raw_amount,
-        raw_date=raw_date,
     )
 
 
@@ -209,10 +201,6 @@ def _two_row_fixture() -> list[ClassifiedRow]:
             title="Grocery run",
             correspondent="Coles",
             created="2025-10-01",
-            modified="2025-10-01",
-            tags=("personal", "low-value"),
-            raw_amount="123.40",
-            raw_date="2025-10-01",
         ),
         make_row(
             2,
@@ -226,11 +214,7 @@ def _two_row_fixture() -> list[ClassifiedRow]:
             title="Invoice",
             correspondent="",
             created="2025-07-15",
-            modified="2025-07-15",
-            tags=("income",),
             codes=(ReviewCode.NEGATIVE_AMOUNT, ReviewCode.INCOME_TAGGED),
-            raw_amount="-12.34",
-            raw_date="",
         ),
     ]
 
@@ -324,7 +308,7 @@ def test_dropped_columns_are_absent_from_the_written_headers(tmp_path: Path) -> 
 def test_duplicate_write_is_byte_identical(tmp_path: Path) -> None:
     first = tmp_path / "first.csv"
     second = tmp_path / "second.csv"
-    rows = [make_row(1), make_row(2, amount=Decimal("-3.00"), tags=("x",))]
+    rows = [make_row(1), make_row(2, amount=Decimal("-3.00"))]
     write_csv(first, rows=rows, columns=REVIEW_COLUMNS)
     write_csv(second, rows=rows, columns=REVIEW_COLUMNS)
     assert read_bytes(first) == read_bytes(second)
