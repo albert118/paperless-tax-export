@@ -343,15 +343,97 @@ def test_run_passes_the_asset_reviewed_tag_flag_to_the_settings(
     seen: list[str | None] = []
     real_run_export = run_export
 
-    def spy(settings: Settings, client: PaperlessClient, **kwargs: object) -> ExportResult:
+    def spy(
+        settings: Settings, client: PaperlessClient, *, output: Path, dry_run: bool = False
+    ) -> ExportResult:
         seen.append(settings.asset_reviewed_tag)
-        return real_run_export(settings, client, **kwargs)  # type: ignore[arg-type]
+        return real_run_export(settings, client, output=output, dry_run=dry_run)
 
     monkeypatch.setattr("paperless_tax_export.cli.run_export", spy)
     base = ["run", "--token-file", str(token_file)]
     assert main([*base, "--output", str(tmp_path / "a")]) == 0
     assert main([*base, "--asset-reviewed-tag", "assets ok", "--output", str(tmp_path / "b")]) == 0
     assert seen == ["asset-reviewed", "assets ok"]
+
+
+def test_run_with_the_deduction_tag_as_the_reviewed_tag_is_a_usage_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    token_file = _write_token(tmp_path)
+    _install_mock_client(monkeypatch, _run_handler())
+    output = tmp_path / "out"
+    code = main(
+        [
+            "run",
+            "--token-file",
+            str(token_file),
+            "--asset-reviewed-tag",
+            "tax deductible",
+            "--output",
+            str(output),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 2
+    assert captured.out == ""
+    assert "asset_reviewed_tag" in captured.err
+    assert "deduction_tag" in captured.err
+    assert "Traceback" not in captured.err
+    assert not output.exists()
+
+
+def test_audit_accepts_a_tag_named_like_the_default_reviewed_tag(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    token_file = _write_token(tmp_path)
+    _install_mock_client(monkeypatch, _audit_handler())
+    code = main(
+        [
+            "audit",
+            "--token-file",
+            str(token_file),
+            "--tag",
+            "asset-reviewed",
+            "--output",
+            str(tmp_path),
+        ]
+    )
+    assert code != 2
+    assert "asset_reviewed_tag" not in capsys.readouterr().err
+
+
+def _over_300_run_handler() -> Callable[[httpx.Request], httpx.Response]:
+    """The run handler serving one 350.00 deduction document and no reviewed tag."""
+    document = document_payload(
+        1,
+        title="Laptop",
+        correspondent=5,
+        custom_fields=[{"field": 10, "value": "350.00"}],
+    )
+    return _run_handler_with_documents(
+        lambda request: filtered_documents_response(request, [document])
+    )
+
+
+@pytest.mark.parametrize("extra", [[], ["--dry-run"]])
+def test_run_warns_once_on_stderr_when_the_reviewed_tag_is_missing(
+    extra: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    token_file = _write_token(tmp_path)
+    _install_mock_client(monkeypatch, _over_300_run_handler())
+    code = main(["run", "--token-file", str(token_file), "--output", str(tmp_path / "out"), *extra])
+    captured = capsys.readouterr()
+    assert code == 0
+    warning = "warning: asset-reviewed tag 'asset-reviewed' not found in Paperless"
+    assert captured.err.count(warning) == 1
+    assert "asset-reviewed tag" not in captured.out
 
 
 def test_run_success_writes_csvs_and_prints_the_summary(

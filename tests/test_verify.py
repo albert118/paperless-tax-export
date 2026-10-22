@@ -95,6 +95,26 @@ def test_real_run_output_verifies_clean(output: Path, capsys: pytest.CaptureFixt
     assert "note: not listed in the manifest: manifest.json" in lines
 
 
+def test_manifest_with_the_reviewed_tag_parameter_verifies_ok(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert "asset_reviewed_tag" in _manifest(output)["parameters"]
+    code, _, err = _verify(output, capsys)
+    assert code == 0
+    assert err == ""
+
+
+def test_manifest_without_the_reviewed_tag_parameter_still_verifies_ok(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _edit_manifest(output, lambda payload: payload["parameters"].pop("asset_reviewed_tag"))
+    assert "asset_reviewed_tag" not in _manifest(output)["parameters"]
+    code, out, err = _verify(output, capsys)
+    assert code == 0
+    assert err == ""
+    assert "verify OK" in out
+
+
 def test_default_output_directory_is_the_one_run_uses(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -401,25 +421,51 @@ def test_unsafe_listed_names_are_a_usage_error(
     assert "Traceback" not in err
 
 
-def test_device_name_listed_in_the_manifest_never_reads_as_ok(
-    output: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    empty = hashlib.sha256(b"").hexdigest()
-    _edit_manifest(output, _set(("outputs", "NUL"), {"sha256": empty, "rows": 0}))
-    code, out, _ = _verify(output, capsys)
-    assert code == 4
-    assert "OK NUL" not in out
-
-
 @pytest.mark.parametrize("name", ["CON", "PRN", "AUX", "NUL", "COM1", "LPT1", "NUL.txt"])
 def test_reserved_device_names_never_read_as_ok(
     name: str, output: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     empty = hashlib.sha256(b"").hexdigest()
     _edit_manifest(output, _set(("outputs", name), {"sha256": empty, "rows": 0}))
-    code, out, _ = _verify(output, capsys)
-    assert code != 0
+    code, out, err = _verify(output, capsys)
+    assert code == 4
     assert f"OK {name}" not in out
+    assert any(
+        line.startswith((f"MISSING {name}", f"UNREADABLE {name}")) for line in out.splitlines()
+    )
+    assert "Traceback" not in out + err
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "review.csv::$DATA",
+        "\treview.csv",
+        "review.csv\t",
+        "\nreview.csv",
+        "review.csv\n",
+        "\u00a0review.csv",
+        "review.csv\u00a0",
+    ],
+    ids=[
+        "ads",
+        "leading-tab",
+        "trailing-tab",
+        "leading-newline",
+        "trailing-newline",
+        "leading-nbsp",
+        "trailing-nbsp",
+    ],
+)
+def test_padded_or_stream_listed_names_are_a_usage_error(
+    name: str, output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _edit_manifest(output, _set(("outputs", name), {"sha256": "0" * 64, "rows": 0}))
+    code, out, err = _verify(output, capsys)
+    assert code == 2
+    assert out == ""
+    assert "not a file name" in err
+    assert "Traceback" not in err
 
 
 def test_dangling_symlink_listed_as_a_csv_is_unreadable_not_a_traceback(

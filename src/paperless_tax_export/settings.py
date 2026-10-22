@@ -68,6 +68,11 @@ class Settings:
             )
         if self.asset_reviewed_tag is not None and not self.asset_reviewed_tag.strip():
             raise SettingsError("asset_reviewed_tag must not be empty; use None to disable it")
+        if self.asset_reviewed_tag == self.deduction_tag:
+            raise SettingsError(
+                f"asset_reviewed_tag must differ from deduction_tag (both {self.deduction_tag!r}): "
+                "every selected document would carry it and every over-300 row would be cleared"
+            )
         if self.expected_count is not None and self.expected_count < 0:
             raise SettingsError(f"expected_count must not be negative, got {self.expected_count}")
         if self.marginal_rate is not None and not (

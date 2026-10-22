@@ -338,6 +338,26 @@ def test_manifest_records_versions_parameters_and_counts(tmp_path: Path) -> None
     assert parameters["deduction_tag"] == "tax deductible"
 
 
+@pytest.mark.parametrize(
+    ("setting", "recorded"), [("asset-reviewed", "asset-reviewed"), (None, None)]
+)
+def test_manifest_records_the_reviewed_tag_parameter_deterministically(
+    setting: str | None, recorded: str | None, tmp_path: Path
+) -> None:
+    settings = Settings(asset_reviewed_tag=setting)
+    manifests = []
+    for name in ("first", "second"):
+        output = tmp_path / name
+        run_export(settings, make_client(make_handler()), output=output)
+        manifests.append((output / "manifest.json").read_bytes())
+    assert manifests[0] == manifests[1]
+    text = manifests[0].decode("utf-8")
+    assert text == json.dumps(json.loads(text), indent=2, sort_keys=True) + "\n"
+    parameters = json.loads(text)["parameters"]
+    assert "asset_reviewed_tag" in parameters
+    assert parameters["asset_reviewed_tag"] == recorded
+
+
 def test_manifest_counts_satisfy_the_accepted_plus_review_invariant(tmp_path: Path) -> None:
     output = tmp_path / "out"
     run_export(Settings(), make_client(make_handler()), output=output)

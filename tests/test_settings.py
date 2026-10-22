@@ -134,3 +134,18 @@ def test_settings_error_carries_the_usage_exit_code() -> None:
     with pytest.raises(SettingsError) as exc_info:
         Settings(base_url="nope")
     assert exc_info.value.exit_code == EXIT_USAGE
+
+
+def test_reviewed_tag_equal_to_the_deduction_tag_is_a_settings_error() -> None:
+    with pytest.raises(SettingsError, match="asset_reviewed_tag.*deduction_tag") as exc_info:
+        Settings(asset_reviewed_tag="tax deductible")
+    assert exc_info.value.exit_code == EXIT_USAGE
+
+
+def test_reviewed_tag_matching_a_custom_deduction_tag_is_a_settings_error() -> None:
+    with pytest.raises(SettingsError, match="asset_reviewed_tag.*deduction_tag"):
+        Settings(deduction_tag="asset-reviewed")
+
+
+def test_reviewed_tag_name_is_not_trimmed() -> None:
+    assert Settings(asset_reviewed_tag=" x ").asset_reviewed_tag == " x "
