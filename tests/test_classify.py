@@ -412,7 +412,6 @@ def test_foreign_currency_amount_is_accepted_with_currency_and_note() -> None:
     )
     assert row.amount_inc_gst == Decimal("5.00")
     assert row.currency == "USD"
-    assert row.raw_amount == "USD5.00"
     assert row.reason_codes == ()
     assert row.notes_for_agent.endswith(
         "foreign currency USD; amount not converted to AUD; over-300 check not applied to USD"
@@ -853,15 +852,6 @@ def test_default_settings_accept_a_transaction_amount_row() -> None:
     assert row.supplier_name == SUPPLIER_NAME
     assert row.reason_codes == ()
     assert row in classification.accepted
-
-
-def test_unknown_tag_ids_fall_back_to_hashtag_in_row() -> None:
-    context = make_context(correspondents={CORRESPONDENT_ID: SUPPLIER_NAME})
-    _, row = classify_one(
-        healthy_doc(1, tags=[77], custom_fields=[{"field": F_AMOUNT.id, "value": "100.00"}]),
-        context,
-    )
-    assert row.tags == ("#77",)
 
 
 REVIEWED_TAG = 91

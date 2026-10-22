@@ -78,15 +78,11 @@ class ClassifiedRow:
     amount_inc_gst: Decimal | None
     currency: str
     document_type: str
-    document_modified: str
     notes_for_agent: str
     title: str
     correspondent: str
     created: str
-    tags: tuple[str, ...]
     reason_codes: tuple[ReviewCode, ...]
-    raw_amount: str
-    raw_date: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,7 +221,6 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
         if document.document_type is not None
         else ""
     )
-    tag_names = tuple(sorted(context.tags.get(tag_id, f"#{tag_id}") for tag_id in document.tags))
     if context.income_tag_ids.intersection(document.tags):
         codes.add(ReviewCode.INCOME_TAGGED)
 
@@ -240,8 +235,6 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
     if over_300_reviewed:
         notes.append(f"over-300 reviewed (tag {settings.asset_reviewed_tag})")
 
-    raw_amount = _raw_cell_value(document, amount_field)
-    raw_date = _raw_cell_value(document, date_field)
     row = ClassifiedRow(
         document_id=document.id,
         date=row_date,
@@ -250,15 +243,11 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
         amount_inc_gst=amount,
         currency="" if amount is None or currency is None else currency,
         document_type=document_type,
-        document_modified=document.modified[:10],  # ISO 8601 like `created`
         notes_for_agent="; ".join(notes),
         title=document.title,
         correspondent=correspondent_name,
         created=created_date,
-        tags=tag_names,
         reason_codes=_order_codes(codes),
-        raw_amount=raw_amount,
-        raw_date=raw_date,
     )
     return _Classified(row=row, codes=frozenset(codes), currency=currency)
 
@@ -279,15 +268,3 @@ def amount_raw(value: CustomFieldValueType) -> str | int | None:
         # the parse is still strict (e.g. 12.34 -> "12.34", 1e+20 unparseable).
         return str(value)
     return None
-
-
-def _raw_cell_value(document: Document, field: CustomFieldDef | None) -> str:
-    """The raw stored text for a review column, or ``""`` when there is none."""
-    if field is None or not document.has_field(field.id):
-        return ""
-    return _raw_text(document.field_value(field.id))
-
-
-def _raw_text(value: CustomFieldValueType) -> str:
-    """The raw cell text for a review-only column, or ``""`` for null."""
-    return "" if value is None else str(value)
