@@ -1,6 +1,6 @@
 [project]
 name = "paperless-tax-export"
-version = "0.2.0"
+version = "0.3.0"
 description = "Read-only export of one financial year from Paperless-ngx to accountant-ready CSVs."
 readme = "README.md"
 requires-python = ">=3.14"
