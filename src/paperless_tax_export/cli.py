@@ -361,6 +361,8 @@ def _run_export_command(settings: Settings, token: str, args: argparse.Namespace
             f"bills: {result.bills_count} listed, {result.bills_counted} counted, "
             f"AUD {result.bills_aud:.2f}"
         )
+    if result.payslip_documents:
+        print(_payslips_summary(result))
     print(
         f"tagged {result.tagged_total}, out of FY {result.out_of_fy_count}, "
         f"selected in FY {result.selected_count}, investments {result.investments_count}"
@@ -381,6 +383,14 @@ def _estimate_summary(result: ExportResult) -> str:
     if result.estimated_saving is not None:
         line += f", estimated saving AUD {result.estimated_saving:.2f}"
     return line
+
+
+def _payslips_summary(result: ExportResult) -> str:
+    ceiling = "not computed" if result.payslip_ceiling is None else f"{result.payslip_ceiling:.2f}"
+    return (
+        f"payslips: {result.payslips_usable} usable, {result.payslips_unusable} unusable; "
+        f"WFH hours ceiling {ceiling}"
+    )
 
 
 def _run_verify_command(args: argparse.Namespace) -> int:

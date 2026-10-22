@@ -50,6 +50,7 @@ class ManifestCounts:
     review: int
     investments_count: int
     bills_count: int
+    payslips_count: int
 
 
 def render_manifest(
@@ -84,6 +85,8 @@ def render_manifest(
             "rates_file_sha256": rates_file_sha256,
             "bill_document_type": settings.bill_document_type,
             "bill_kind_tags": dict(sorted(settings.bill_kind_tags.items())),
+            "payslip_document_type": settings.payslip_document_type,
+            "payslip_fields": dict(sorted(settings.payslip_fields.items())),
             "wfh_hours": _typed(settings.wfh.hours),
             "wfh_rate_per_hour": _typed(settings.wfh.rate_per_hour),
             "wfh_internet_pct": _typed(settings.wfh.internet_pct),
@@ -98,6 +101,7 @@ def render_manifest(
             "review": counts.review,
             "investments_count": counts.investments_count,
             "bills_count": counts.bills_count,
+            "payslips_count": counts.payslips_count,
         },
         "expected_count": settings.expected_count,
         "outputs": {file.name: {"sha256": file.sha256, "rows": file.rows} for file in files},

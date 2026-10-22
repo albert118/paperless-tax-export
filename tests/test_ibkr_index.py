@@ -8,6 +8,7 @@ from pathlib import Path
 import httpx
 import pytest
 from conftest import (
+    PAYSLIP_FIELD_PAYLOADS,
     correspondent_payload,
     custom_field_payload,
     document_payload,
@@ -53,14 +54,23 @@ def make_handler(
             return json_response(page_payload(list(all_tags)))
         if path == "/api/custom_fields/":
             return json_response(
-                page_payload([custom_field_payload(10, "Transaction Amount", data_type="monetary")])
+                page_payload(
+                    [
+                        custom_field_payload(10, "Transaction Amount", data_type="monetary"),
+                        *PAYSLIP_FIELD_PAYLOADS,
+                    ]
+                )
             )
         if path == "/api/correspondents/":
             return json_response(page_payload(list(correspondents)))
         if path == "/api/document_types/":
             return json_response(
                 page_payload(
-                    [document_type_payload(6, "Statement"), document_type_payload(7, "bill")]
+                    [
+                        document_type_payload(6, "Statement"),
+                        document_type_payload(7, "bill"),
+                        document_type_payload(8, "salary"),
+                    ]
                 )
             )
         if path == "/api/documents/":

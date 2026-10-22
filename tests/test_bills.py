@@ -663,6 +663,7 @@ def test_estimate_row_order_is_fixed(tmp_path: Path) -> None:
         "wfh_actual_cost",
         "wfh_scenarios",
         "wfh_note",
+        "wfh_hours_ceiling",
         "pending",
         "pending_no_amount",
         "tax_saving",
@@ -897,10 +898,11 @@ def test_warnings_come_after_the_existing_ones_in_a_fixed_order(tmp_path: Path) 
         bill(1, tags=[INTERNET, DEDUCTION_TAG]),
     ]
     result = run(tmp_path, documents)
-    assert [warning.split(" is a bill")[0] for warning in result.warnings[-2:]] == [
+    assert [warning.split(" is a bill")[0] for warning in result.warnings[-3:-1]] == [
         "document 1",
         "document 2",
     ]
+    assert result.warnings[-1] == "document type 'salary' not found in Paperless; no payslip hours"
     assert result.warnings[0].startswith("correspondent 'Interactive Brokers' not found")
     assert result.warnings[1].startswith("no exchange rate for USD")
     assert MISSING_TYPE_WARNING not in result.warnings

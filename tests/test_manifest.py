@@ -11,6 +11,7 @@ import httpx
 import pytest
 from conftest import (
     BASE_URL,
+    PAYSLIP_FIELD_PAYLOADS,
     correspondent_payload,
     custom_field_payload,
     document_payload,
@@ -88,7 +89,12 @@ def make_handler(
             return json_response(page_payload([tag_payload(TAG_ID, "tax deductible")]))
         if path == "/api/custom_fields/":
             return json_response(
-                page_payload([custom_field_payload(10, "Transaction Amount", data_type="monetary")])
+                page_payload(
+                    [
+                        custom_field_payload(10, "Transaction Amount", data_type="monetary"),
+                        *PAYSLIP_FIELD_PAYLOADS,
+                    ]
+                )
             )
         if path == "/api/correspondents/":
             return json_response(
@@ -102,7 +108,11 @@ def make_handler(
         if path == "/api/document_types/":
             return json_response(
                 page_payload(
-                    [document_type_payload(6, "Statement"), document_type_payload(7, "bill")]
+                    [
+                        document_type_payload(6, "Statement"),
+                        document_type_payload(7, "bill"),
+                        document_type_payload(8, "salary"),
+                    ]
                 )
             )
         if path == "/api/documents/":
@@ -343,6 +353,7 @@ def test_manifest_records_versions_parameters_and_counts(tmp_path: Path) -> None
         "review": 1,
         "investments_count": 1,
         "bills_count": 0,
+        "payslips_count": 0,
     }
     parameters = manifest["parameters"]
     assert isinstance(parameters, dict)

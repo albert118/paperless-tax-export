@@ -51,11 +51,15 @@ from paperless_tax_export.manifest import (
 )
 from paperless_tax_export.models import Document
 from paperless_tax_export.parsing import ReviewCode
+from paperless_tax_export.payslips import (
+    build_payslip_section,
+    read_payslips,
+)
 from paperless_tax_export.selection import (
     resolve_fields,
     resolve_tag,
-    select_bill_documents,
     select_documents,
+    select_documents_by_type,
     select_ibkr_documents,
 )
 from paperless_tax_export.settings import Settings
@@ -87,6 +91,10 @@ class ExportResult:
     bills_count: int = 0
     bills_counted: int = 0
     bills_aud: Decimal = Decimal(0)
+    payslip_documents: int = 0
+    payslips_usable: int = 0
+    payslips_unusable: int = 0
+    payslip_ceiling: Decimal | None = None
 
 
 def run_export(
@@ -115,6 +123,7 @@ def run_export(
 
     required = [settings.field_amount] if settings.field_amount is not None else []
     optional = [name for name in (settings.field_date, settings.field_supplier) if name is not None]
+    optional.extend(settings.payslip_fields.values())
     resolved = resolve_fields(client, required=required, optional=optional)
     amount_field = resolved[settings.field_amount] if settings.field_amount is not None else None
     date_field = resolved[settings.field_date] if settings.field_date is not None else None
@@ -169,16 +178,25 @@ def run_export(
     investments_found, investment_documents = select_ibkr_documents(
         client, settings.ibkr_correspondent, settings.fy_start, settings.fy_end
     )
-    bills_found, bill_documents = select_bill_documents(
+    bills_found, bill_documents = select_documents_by_type(
         client, document_types, settings.bill_document_type, settings.fy_start, settings.fy_end
     )
     bill_rows = build_bill_rows(bill_documents, context, deduction_tag.id)
+    payslips_found, payslip_documents = select_documents_by_type(
+        client, document_types, settings.payslip_document_type, settings.fy_start, settings.fy_end
+    )
+    payslips = build_payslip_section(
+        read_payslips(payslips_found, payslip_documents, settings, resolved),
+        settings,
+        settings.wfh.hours,
+    )
     estimate = build_estimate(
         classification.accepted,
         classification.review,
         rates.by_currency,
         settings.marginal_rate,
         make_bills_section(bill_rows, rates.by_currency, settings.wfh),
+        payslips.rows,
     )
     warnings = (
         *_investments_warnings(
@@ -187,6 +205,7 @@ def run_export(
         *_asset_reviewed_tag_warnings(settings, context, classification),
         *_missing_rate_warnings(estimate),
         *_bills_warnings(settings, bills_found, bill_rows, context.tags.values()),
+        *payslips.warnings,
     )
     investment_rows = tuple(_investment_row(document, context) for document in investment_documents)
 
@@ -216,6 +235,7 @@ def run_export(
             review=len(review_rows),
             investments_count=len(investment_rows),
             bills_count=len(bill_rows),
+            payslips_count=payslips.usable_count,
         ),
         files=csv_files,
         server_version=client.server_version,
@@ -243,6 +263,10 @@ def run_export(
         bills_count=len(bill_rows),
         bills_counted=sum(1 for row in bill_rows if row.counts_toward_wfh),
         bills_aud=estimate.bills_aud,
+        payslip_documents=payslips.document_count,
+        payslips_usable=payslips.usable_count,
+        payslips_unusable=payslips.unusable_count,
+        payslip_ceiling=payslips.ceiling,
     )
 
 

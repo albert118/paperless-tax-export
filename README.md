@@ -20,7 +20,7 @@ To run it in Docker next to Paperless-ngx, see [examples/README.md](examples/REA
 | `deductions.csv` | Documents that pass every check. |
 | `investments.csv` | Index of the investing portfolio statements for the year: the documents of the one configured correspondent (`--ibkr-correspondent`, default `Interactive Brokers`). Header only, plus a warning, when the correspondent is missing. A document that also carries the deduction tag appears here and in the deduction outputs, with a warning. |
 | `bills.csv` | The utilities and bills of the year: every Paperless document of the configured document type (default `bill`), with its kind (electricity, internet, phone, gas) from a tag. Header only, plus a warning, when the type is missing. See [Bills and the WFH scenarios](#bills-and-the-wfh-scenarios). |
-| `estimate.csv` | An estimate of total deductions in AUD, with a separate pending figure, an optional tax saving and, from the bills, illustrative work-from-home scenarios. An estimate, not tax advice. See [The estimate](#the-estimate). |
+| `estimate.csv` | An estimate of total deductions in AUD, with a separate pending figure, an optional tax saving and, from the bills, illustrative work-from-home scenarios and, from payslip custom fields, a ceiling on WFH hours. An estimate, not tax advice. See [The estimate](#the-estimate). |
 | `manifest.json` | Run parameters, tool and Paperless versions, counts, expected count, and SHA-256 and row count of each other output. No timestamp. |
 
 All files go into `output/`, which is never committed.
@@ -244,6 +244,9 @@ A manifest written by 0.2.x lists `ibkr-documents.csv` and `counts.ibkr_count`, 
 rejects it with exit 2. Re-run `run` to produce a current manifest.
 
 `estimate.csv` is a required output: a manifest that does not list it also exits 2, naming it.
+`counts.payslips_count` is required too: a manifest written before the payslip hours existed
+lacks it and exits 2, naming it. It has no file to compare with, so `verify` only checks that
+it is a non-negative integer.
 
 ## The Paperless token
 
@@ -315,6 +318,7 @@ order:
 | `deductions_by_type` | document type, `(none)` when blank | `count` and the AUD total of converted amounts, sorted by type name. |
 | `deductions_by_month` | `YYYY-MM` of the row date | `count` and the AUD total of converted amounts, sorted ascending. |
 | `bills`, `wfh_evidence`, `wfh_fixed_rate`, `wfh_actual_cost`, `wfh_scenarios`, `wfh_note` | see below | Bill totals and the illustrative WFH scenarios, between `deductions_by_month` and `pending`. They never change the deductions, pending or tax saving figures. See [Bills and the WFH scenarios](#bills-and-the-wfh-scenarios). |
+| `wfh_hours_ceiling` | see below | A ceiling on WFH hours from payslip custom fields, after `wfh_note` and before `pending`. It bounds the hours and proves none. Nothing here changes the deductions, pending or tax saving figures. See [Payslip hours](#payslip-hours-a-ceiling-on-wfh-hours). |
 | `pending` | `review rows with an amount` | The `review.csv` rows that have an amount: `count` and their AUD total, negatives included. These are not claimable yet. It is an upper bound: it includes suspected duplicates and items that may never be deductions (the `notes` cell says so). |
 | `pending_no_amount` | `review rows without an amount` | `count` of the `review.csv` rows with no amount. |
 | `tax_saving` | `estimated saving at marginal rate <rate>` | Only when `TAX_MARGINAL_RATE` is set: the deductions AUD total times the rate, in `amount_aud`. |
@@ -514,6 +518,100 @@ and writes nothing. The outputs are written in this order: `deductions.csv`, `re
 the manifest with `counts.bills_count` and a file entry, and `verify` requires it: a manifest
 that does not list it exits 2 and names `bills.csv`; re-run `run`. The manifest also records
 `parameters.bill_document_type` and `parameters.bill_kind_tags`.
+
+## Payslip hours (a ceiling on WFH hours)
+
+`run` reads payslip data from Paperless custom fields and shows a ceiling on WFH hours in
+`estimate.csv`. This tool never parses payslip text: it does not read a document's `content`
+and it never prints, writes or compares a payslip title. A separate extractor (another
+repository) fills the fields from the PDFs, or you can fill them by hand. The fields hold
+dates and hours only. There is no field for a pay amount, tax or an identifier, and this tool
+reads none.
+
+### What it reads
+
+The documents of one document type (`salary` by default, exact name) with `created` in the
+financial year, selected like the bills (`document_type__id`, the same filter guard: a server
+that ignores a filter exits 4; two types with the name exit 4). Per payslip it reads six
+custom fields. The names are the defaults of `Settings.payslip_fields` (keys on the left):
+
+| Key | Default field name | Type |
+| --- | --- | --- |
+| `period_start` | `Pay Period Start` | date |
+| `period_end` | `Pay Period End` | date |
+| `ordinary_hours` | `Ordinary Hours` | number |
+| `annual_leave_hours` | `Annual Leave Hours` | number |
+| `personal_leave_hours` | `Personal Leave Hours` | number |
+| `public_holiday_hours` | `Public Holiday Hours` | number |
+
+There are no command-line flags. `Settings.payslip_document_type` and `Settings.payslip_fields`
+are recorded in the manifest parameters.
+
+A payslip is usable when both dates are strict ISO dates (`period_end` not before
+`period_start`) and `ordinary_hours` is present. Hours are `Decimal` values read from the
+field's text (a number from Paperless goes through its string form), at least 0 and at most
+744 (31 days x 24 hours) per payslip per field. A leave field with no entry on the document
+counts as 0, because the extractor may omit zero leave. A leave entry that is null or invalid
+makes the payslip unusable, as does any problem with the dates or ordinary hours. An unusable
+payslip is left out of every sum and counted.
+
+A Paperless boolean on an hours field is already an integer when this tool sees it, so it is
+read as 0 or 1 hour. Keep the hours fields numeric.
+
+A payslip's hours are counted in full even when its period reaches outside the financial year;
+the `payslips` row says how many periods do.
+
+### The rows
+
+All rows have the section `wfh_hours_ceiling`, in this fixed order. Hours are in the `amount`
+column (currency blank, `notes` starts with `hours`); counts are in `count`.
+
+| `label` | What it holds |
+| --- | --- |
+| `payslips` | `count` of usable payslips. `notes` has the unusable count and how many periods extend outside the year. |
+| `period coverage` | `notes`: the first period start and last period end among usable payslips, and the year's start and end. |
+| `coverage gaps` | `count` of days in the year that no usable period covers. `notes` lists up to 5 ranges as `YYYY-MM-DD..YYYY-MM-DD`, then `and N more`. |
+| `overlapping days` | `count` of days covered by more than one usable period (a day counts once however many periods cover it). |
+| `ordinary hours` | The sum of Ordinary Hours. |
+| `leave hours` | The sum of annual, personal and public holiday hours; `notes` has the three sums. |
+| `ceiling` | Ordinary hours minus leave hours. A negative figure carries a note. |
+| `wfh_hours_check` | Only when `WFH_HOURS` is set: `claimed WFH hours <= ceiling` with the difference, or `exceeds the ceiling by X hours`. |
+
+When nothing can be computed (the type does not exist, a required field does not exist, or no
+payslip is usable) the section is a `payslips` row (`count` 0; `notes`: `payslip documents: D;
+unusable: N`, so "no payslips" differs from "all unusable") and one `ceiling` row with
+`not computed: <reason>`, plus a
+`wfh_hours_check` row with the same text when `WFH_HOURS` is set. When a leave field does not
+exist in Paperless, `leave hours`, `ceiling` and the check say `not computed`; the other rows
+stay. Day arithmetic uses calendar dates only.
+
+### What the ceiling is and is not
+
+The ceiling is a bound, not evidence. Payslips show hours paid and leave, not where the work
+happened, so the figure caps the WFH hours you could have worked and proves none of them. The
+owner's research note (not verified here) says the ATO asks for a record kept at the time of
+working, and a reconstruction from payslips is not that. Use the ceiling to catch a claim that
+is too high, not to support one.
+
+The formula assumes Ordinary Hours already includes the leave hours paid, so subtracting leave
+leaves hours worked. That is the owner's reading of the payslip layout and needs confirming
+against a real payslip. If Ordinary Hours excludes leave, the ceiling is too low.
+
+`payslip_document_type` must differ from `bill_document_type` (exit 2 otherwise).
+
+### Warnings and console
+
+Every user without a `salary` document type sees one stderr warning and a `ceiling: not
+computed` row on each run. That is expected, not a fault.
+
+Warnings go to stderr after the bills warnings, in this order: the document type is missing
+(`document type 'salary' not found in Paperless; no payslip hours`); payslip custom fields
+missing from Paperless, by name (never fatal); unusable payslips, by document id (at most 20,
+then `and N more`; ids only, never titles).
+
+When payslip documents exist, `run` prints `payslips: N usable, M unusable; WFH hours ceiling
+<hours>` (two decimals, or `not computed`) after the `bills:` line. The manifest records
+`counts.payslips_count` (usable payslips). There is no new output file.
 
 ## Development
 
