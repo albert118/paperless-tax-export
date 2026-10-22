@@ -66,30 +66,39 @@ re-run; a document with no code is written to `deductions.csv`.
 | --- | --- |
 | `MISSING_DATE` | The date field (`Transaction Date`) has an entry that is empty, null or not an ISO date. A document with no entry at all gets no code: the row date is `created` and `notes_for_agent` says `date from created`. |
 | `MISSING_AMOUNT` | The document has no entry for the amount field (`Transaction Amount`), or the amount field is not configured. |
-| `MISSING_SUPPLIER` | The document has no correspondent (and no value in the optional supplier field, if one is configured). |
-| `AMOUNT_UNPARSEABLE` | The amount entry is empty, null or not a number such as `AUD12.34`, `12.34` or `AUD1,234.50`. |
+| `MISSING_SUPPLIER` | The document has no correspondent. If an optional supplier custom field is configured (a library-only setting), the code also applies when the document has an entry in that field that is blank or null, even if it has a correspondent. |
+| `AMOUNT_UNPARSEABLE` | The amount entry is empty, null or does not match an optional uppercase three-letter currency prefix directly followed by a number with optional `,` thousands grouping and decimals. `AUD12.34`, `12.34` and `AUD1,234.50` parse; `$12.34`, `aud12.34` and `AUD 12.34` do not. |
 | `NEGATIVE_AMOUNT` | The amount is below zero (a credit note or refund), in any currency. |
 | `ZERO_AMOUNT` | The amount is zero, in any currency: almost certainly a missing value or a placeholder. |
-| `DATE_OUT_OF_FY` | The date field holds a date outside the financial year. Selection uses `created`, so this applies to a date field that disagrees with it. |
-| `AMOUNT_OVER_300` | An AUD amount above 300, as a prompt to decide whether the purchase needs asset treatment. Not applied to other currencies. |
-| `DUPLICATE_SUSPECT` | Another document has the same `supplier_name`, date, amount and currency. Every matching document gets the code. |
+| `DATE_OUT_OF_FY` | The date field holds a valid date outside the financial year. Selection uses `created`, so this fires only when that field date is outside the FY; a field date that differs from `created` but is inside the FY gets no code. |
+| `AMOUNT_OVER_300` | An AUD amount above 300, unless the document carries the reviewed tag (`asset-reviewed` by default). It prompts you to decide whether the purchase needs asset treatment. Not applied to other currencies. See [Clearing `AMOUNT_OVER_300`](#clearing-amount_over_300). |
+| `DUPLICATE_SUSPECT` | Another document selected in this run has the same `supplier_name` (the correspondent by default), date, amount and currency. Documents with no parsed amount match each other. Every matching document gets the code. |
 | `INCOME_TAGGED` | The document also carries an income tag (`income` or `dividend` by default). |
 
 ### Notes printed by `run`
 
-`run` prints a few settings-level lines once per run, as `note:` on stdout. They are
-information, not warnings, and they do not change the exit code.
+`run` prints settings-level lines once per run, as `note:` on stdout, after a successful
+run. They are information and do not change the exit code.
 
 - `supplier_name is the document correspondent; no separate supplier custom field is
   configured (the default)`: the `supplier_name` column in `deductions.csv` is the
-  document's correspondent. There is no supplier custom field to configure unless you set
-  `Settings.field_supplier`; `review.csv` shows the same value in `correspondent`.
+  document's correspondent. The command line cannot set a supplier field, so this line
+  always appears; `review.csv` shows the same value in `correspondent`.
 - `date field not configured; row date falls back to the document created date` and
-  `amount field not configured; every row gets MISSING_AMOUNT` appear only when those
-  field names are unset.
+  `amount field not configured; every row gets MISSING_AMOUNT` appear only when the tool
+  is used as a library with those settings set to `None`. The command line never prints
+  them.
 
-Per-row information goes in `notes_for_agent`: `amount missing`, `date from created`, and
-the foreign-currency note described above.
+Findings about your data or Paperless setup are printed separately as `warning:` lines on
+stderr. They do not change the exit code either. Examples: the investing correspondent
+is missing, a document is in both the deduction and investing sets, and an
+`asset-reviewed` tag that does not exist while an `AMOUNT_OVER_300` row remains (see
+[Clearing `AMOUNT_OVER_300`](#clearing-amount_over_300)).
+
+Per-row information goes in `notes_for_agent`, joined with `; `: `amount missing` (the
+amount field is configured and no amount was read), `date from created` (the date field
+has no usable entry), the foreign-currency notes described above, and
+`over-300 reviewed (tag <name>)` when the reviewed tag cleared `AMOUNT_OVER_300`.
 
 CSV format: UTF-8 with BOM, `\r\n` line endings, ISO dates, two-decimal amounts without
 currency symbols or thousands separators, rows sorted by date then document ID, and text
