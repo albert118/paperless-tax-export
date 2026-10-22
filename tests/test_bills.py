@@ -372,8 +372,8 @@ def test_a_bill_with_the_deduction_tag_warns_stays_listed_and_is_left_out_of_the
     ]
     result = run(tmp_path, documents)
     assert bill_warnings(result) == (
-        "document 2 is a bill and carries the deduction tag; it stays in deductions.csv and is "
-        "excluded from the bill totals and WFH figures in estimate.csv",
+        "document 2 is a bill and carries the deduction tag; it stays in deductions.csv or "
+        "review.csv and is excluded from the bill totals and WFH figures in estimate.csv",
     )
     rows = {row["paperless_document_id"]: row for row in bills(tmp_path)}
     assert rows["2"]["notes_for_agent"] == "also in deductions.csv; excluded from WFH totals"
@@ -593,7 +593,7 @@ def test_actual_cost_with_one_variable_missing_counts_only_the_computed_rows(
     )
     scenario = figures[("wfh_scenarios", "base deductions + actual cost")]
     assert scenario["amount"] == Decimal(total) + Decimal("300.00")
-    assert str(scenario["notes"]).endswith(f"partial, not computed: {variable}")
+    assert str(scenario["notes"]).endswith(f"partial; not computed: set {variable}")
 
 
 def _fields(wfh: WfhInputs) -> dict[str, Decimal | None]:
@@ -833,7 +833,7 @@ def test_console_prints_the_bills_line_after_the_estimate_line(
     assert main(_run_cli(tmp_path, tmp_path / "out")) == 0
     lines = capsys.readouterr().out.splitlines()
     index = next(i for i, line in enumerate(lines) if line.startswith("estimate:"))
-    assert lines[index + 1] == "bills: 3 listed, AUD 120.50"
+    assert lines[index + 1] == "bills: 3 listed, 2 counted, AUD 120.50"
 
 
 def test_console_has_no_bills_line_without_bills(
@@ -914,3 +914,111 @@ def test_bills_in_a_foreign_currency_without_a_rate_join_the_missing_rate_warnin
     figures = estimate(tmp_path)
     assert figures[("bills", "total")]["amount_aud"] == "0.00"
     assert figures[("bills", "total")]["notes"] == "excluded, no rate: USD 1"
+
+
+# --- review revision ---------------------------------------------------------
+
+
+def test_a_deduction_tagged_bill_with_a_review_code_is_excluded_and_warned(
+    tmp_path: Path,
+) -> None:
+    documents = [
+        bill(1, kind=INTERNET, amount="100.00"),
+        bill(2, kind=INTERNET, amount="0.00", tags=[INTERNET, DEDUCTION_TAG]),
+    ]
+    result = run(tmp_path, documents)
+    assert bill_warnings(result) == (
+        "document 2 is a bill and carries the deduction tag; it stays in deductions.csv or "
+        "review.csv and is excluded from the bill totals and WFH figures in estimate.csv",
+    )
+    rows = {row["paperless_document_id"]: row for row in bills(tmp_path)}
+    assert rows["2"]["notes_for_agent"] == (
+        "zero amount; also in deductions.csv; excluded from WFH totals"
+    )
+    review = table(tmp_path / "out" / "review.csv")
+    assert [row["paperless_document_id"] for row in review] == ["2"]
+    figures = estimate(tmp_path)
+    assert figures[("bills", "total")]["count"] == "1"
+    assert figures[("bills", "total")]["amount_aud"] == "100.00"
+    assert figures[("wfh_evidence", "internet")]["count"] == "1"
+    assert (result.bills_count, result.bills_counted) == (2, 1)
+
+
+@pytest.mark.parametrize("kind", ["internet", "phone"])
+def test_actual_cost_row_says_when_no_bills_were_found_and_the_total_is_partial(
+    kind: str,
+) -> None:
+    wfh = WfhInputs(
+        internet_pct=Decimal("50"), phone_pct=Decimal("25"), energy_amount=Decimal("30.00")
+    )
+    other = "phone" if kind == "internet" else "internet"
+    figures = _section([_row(1, other, "100.00")], wfh, base="300.00")
+    row = figures[("wfh_actual_cost", kind)]
+    assert row["amount"] == Decimal("0.00")
+    assert row["notes"] == f"no {kind} bills found"
+    total = figures[("wfh_actual_cost", "total")]
+    assert total["notes"] == f"partial; no {kind} bills found"
+    scenario = figures[("wfh_scenarios", "base deductions + actual cost")]
+    assert scenario["notes"] == (
+        f"illustrative; one method per year; not added to the base total; "
+        f"partial; no {kind} bills found"
+    )
+    assert scenario["amount"] == Decimal(total["amount"]) + Decimal("300.00")  # type: ignore[arg-type]
+
+
+def test_actual_cost_total_combines_missing_variables_and_empty_kinds() -> None:
+    wfh = WfhInputs(internet_pct=Decimal("50"), energy_amount=Decimal("30.00"))
+    figures = _section([], wfh)
+    assert figures[("wfh_actual_cost", "total")]["notes"] == (
+        "partial; not computed: set WFH_PHONE_PCT; no internet bills found"
+    )
+
+
+def test_the_wfh_note_is_attributed_to_the_owner() -> None:
+    figures = _section([])
+    notes = str(figures[("wfh_note", "illustrative only")]["notes"])
+    assert notes.startswith("per your own notes: ")
+
+
+@pytest.mark.parametrize(
+    "settings_kwargs",
+    [
+        {"bill_kind_tags": {**DEFAULT_BILL_KIND_TAGS, "gas": "tax deductible"}},
+        {"bill_kind_tags": {**DEFAULT_BILL_KIND_TAGS, "gas": "asset-reviewed"}},
+        {
+            "deduction_tag": "internet",
+        },
+        {"asset_reviewed_tag": "phone"},
+    ],
+)
+def test_settings_reject_a_kind_tag_that_is_the_deduction_or_reviewed_tag(
+    settings_kwargs: dict[str, object],
+) -> None:
+    with pytest.raises(SettingsError, match="deduction_tag or asset_reviewed_tag"):
+        Settings(**settings_kwargs)  # type: ignore[arg-type]
+
+
+def test_a_disabled_reviewed_tag_does_not_clash_with_kind_tags() -> None:
+    Settings(asset_reviewed_tag=None)
+
+
+def test_missing_kind_tags_warn_once_when_bills_are_selected(tmp_path: Path) -> None:
+    kind_tags = {**DEFAULT_BILL_KIND_TAGS, "gas": "Gas", "phone": "mobile"}
+    result = run(tmp_path, [bill(1)], Settings(bill_kind_tags=kind_tags))
+    assert bill_warnings(result) == (
+        "bill kind tags not found in Paperless: Gas, mobile; names match case-sensitively "
+        "and bills cannot get those kinds",
+    )
+
+
+def test_missing_kind_tags_are_silent_without_bills_or_when_all_exist(tmp_path: Path) -> None:
+    kind_tags = {**DEFAULT_BILL_KIND_TAGS, "gas": "Gas"}
+    assert bill_warnings(run(tmp_path / "a", [], Settings(bill_kind_tags=kind_tags))) == ()
+    assert bill_warnings(run(tmp_path / "b", [bill(1)])) == ()
+
+
+def test_kind_tag_names_match_case_sensitively(tmp_path: Path) -> None:
+    kind_tags = {**DEFAULT_BILL_KIND_TAGS, "internet": "Internet"}
+    run(tmp_path, [bill(1, tags=[INTERNET])], Settings(bill_kind_tags=kind_tags))
+    (row,) = bills(tmp_path)
+    assert (row["kind"], row["notes_for_agent"]) == ("", "no kind tag")

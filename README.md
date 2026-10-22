@@ -425,7 +425,10 @@ data-gathering file with no review split.
   `internet`, `phone` and `gas` (`Settings.bill_kind_tags` maps each kind to its tag name;
   each kind needs its own tag). A bill with none of them has a blank kind and the note
   `no kind tag`. A bill with several has a blank kind and the note
-  `several kind tags: a; b` (the tag names, sorted). Other tags are ignored.
+  `several kind tags: a; b` (the tag names, sorted). Other tags are ignored. Tag names match
+  case-sensitively, so `Gas` is not `gas`. A kind tag may not have the name of the deduction
+  tag or the `asset-reviewed` tag (exit 2). When bills are listed and a configured kind tag
+  name does not exist in Paperless, `run` warns once on stderr naming the missing tag names.
 
 Notes are joined with `; ` in this order: amount, date, kind, deduction overlap.
 
@@ -435,8 +438,8 @@ A bill that also carries the deduction tag (`tax deductible`) stays in `deductio
 `review.csv` like any other document. In `bills.csv` it is still listed, with the note
 `also in deductions.csv; excluded from WFH totals`, and `run` warns on stderr with its id. It
 is left out of every bill figure in `estimate.csv` (totals, kinds, evidence counts) so
-nothing counts twice. The note names `deductions.csv`, but the document may be in
-`review.csv` if it has a review code. Negative and zero bills are listed but not counted in
+nothing counts twice. The note names `deductions.csv`, but a document with a review code is
+in `review.csv` instead; the warning says `deductions.csv or review.csv`. Negative and zero bills are listed but not counted in
 those figures; a bill with no amount is counted but adds nothing to a total.
 
 ### The WFH variables
@@ -477,11 +480,11 @@ round-half-up.
 | `wfh_evidence` | `internet`, `phone`, `energy` | The number of counted bills for each covered expense (`energy` is electricity plus gas); `notes` says `no bill found` when it is zero. |
 | `wfh_evidence` | `stationery` | A note only: the tool does not track stationery. |
 | `wfh_fixed_rate` | `hours x rate` | `WFH_HOURS` x `WFH_RATE_PER_HOUR`. Blank with `not computed: set WFH_HOURS and WFH_RATE_PER_HOUR` when either is missing. |
-| `wfh_actual_cost` | `internet`, `phone` | The counted bills' AUD total x the percentage. Blank with `not computed: set <VARIABLE>` when it is missing. |
+| `wfh_actual_cost` | `internet`, `phone` | The counted bills' AUD total x the percentage. Blank with `not computed: set <VARIABLE>` when it is missing. With the percentage set but no counted bill of that kind, the row is `0.00` and `notes` says `no internet bills found` (or `no phone bills found`). |
 | `wfh_actual_cost` | `energy` | The value of `WFH_ENERGY_AMOUNT`. |
-| `wfh_actual_cost` | `total` | The sum of the rows that were computed; `notes` names the variables still missing. Blank when none was computed. |
-| `wfh_scenarios` | `base deductions + fixed rate`, `base deductions + actual cost` | The deductions total plus the method's figure, for each method computed fully or partly. `notes`: `illustrative; one method per year; not added to the base total`. |
-| `wfh_note` | `illustrative only` | The reminder that the fixed rate covers internet, phone and energy, so those bills are not also claimed in `deductions.csv`. |
+| `wfh_actual_cost` | `total` | The sum of the rows that were computed; `notes` names the variables still missing and any kind with no bills, and starts with `partial` when a computed total has such gaps. Blank when none was computed. |
+| `wfh_scenarios` | `base deductions + fixed rate`, `base deductions + actual cost` | The deductions total plus the method's figure, for each method computed fully or partly. `notes`: `illustrative; one method per year; not added to the base total`, followed by the total's `partial` note when it has one. |
+| `wfh_note` | `illustrative only` | Starts with `per your own notes:`. Your own assumption, not a verified rule: the fixed rate covers internet, phone and energy, so those bills would not also be claimed in `deductions.csv`. |
 
 The WFH figures are never added to `deductions`, `pending` or `tax_saving`. The method is
 undecided and one method applies per year, so both are shown side by side.
@@ -502,8 +505,10 @@ Check each point, and the rate you put in `WFH_RATE_PER_HOUR`, before relying on
 
 ### Console and `verify`
 
-When any bills are listed, `run` prints `bills: N listed, AUD <total>` after the estimate
-line, where `<total>` is the AUD total of the counted bills. `--dry-run` prints the same line
+When any bills are listed, `run` prints `bills: N listed, M counted, AUD <total>` after the
+estimate line. `N` counts every row of `bills.csv`; `M` counts only the bills that feed the
+estimate (not overlapping with the deduction tag, not negative or zero); `<total>` is their
+AUD total. `--dry-run` prints the same line
 and writes nothing. The outputs are written in this order: `deductions.csv`, `review.csv`,
 `investments.csv`, `bills.csv`, `estimate.csv`, `manifest.json`. `bills.csv` is listed in
 the manifest with `counts.bills_count` and a file entry, and `verify` requires it: a manifest

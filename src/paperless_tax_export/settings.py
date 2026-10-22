@@ -116,6 +116,12 @@ class Settings:
         if not self.bill_document_type.strip():
             raise SettingsError("bill_document_type must not be empty")
         _validate_bill_kind_tags(self.bill_kind_tags)
+        reserved = {self.deduction_tag, self.asset_reviewed_tag}
+        if reserved.intersection(self.bill_kind_tags.values()):
+            raise SettingsError(
+                "bill_kind_tags must not use the same tag name as deduction_tag or "
+                "asset_reviewed_tag"
+            )
         if self.timeout_seconds <= 0:
             raise SettingsError(f"timeout_seconds must be positive, got {self.timeout_seconds}")
 

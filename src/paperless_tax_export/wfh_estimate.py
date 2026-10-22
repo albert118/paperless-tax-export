@@ -38,8 +38,9 @@ NO_BILL_NOTE = "no bill found"
 STATIONERY_NOTE = "not tracked by this tool; keep your own bill or receipt for it"
 SCENARIO_NOTE = "illustrative; one method per year; not added to the base total"
 WFH_NOTE = (
-    "illustrative only: fixed rate covers internet, phone and energy, so those bills are not"
-    " also claimed in deductions.csv; your method is decided with your accountant"
+    "per your own notes: illustrative only: fixed rate covers internet, phone and energy,"
+    " so those bills are not also claimed in deductions.csv;"
+    " your method is decided with your accountant"
 )
 ENERGY_NOTE = "your own appliance-based figure; not computed from bills"
 
@@ -114,9 +115,9 @@ def build_bills_section(
     rows.extend(_evidence_rows(by_kind))
     fixed = _fixed_rate(wfh)
     rows.append(fixed.row)
-    actual_rows, actual_total, actual_missing = _actual_cost_rows(by_kind, wfh)
+    actual_rows, actual_total, actual_note = _actual_cost_rows(by_kind, wfh)
     rows.extend(actual_rows)
-    rows.extend(_scenario_rows(deductions_aud, fixed.amount, actual_total, actual_missing))
+    rows.extend(_scenario_rows(deductions_aud, fixed.amount, actual_total, actual_note))
     rows.append(EstimateRow("wfh_note", "illustrative only", notes=WFH_NOTE))
     return BillsSection(
         rows=tuple(rows),
@@ -168,9 +169,10 @@ def _fixed_rate(wfh: WfhInputs) -> _Fixed:
 
 def _actual_cost_rows(
     by_kind: Mapping[str, _Tally], wfh: WfhInputs
-) -> tuple[list[EstimateRow], Decimal | None, list[str]]:
-    """The actual-cost rows, the total of the computed ones (``None``: none) and missing names."""
+) -> tuple[list[EstimateRow], Decimal | None, str]:
+    """The actual-cost rows, the total of the computed ones (``None``: none) and its note."""
     parts: list[tuple[str, str, Decimal | None, str]] = []
+    empty: list[str] = []
     for label, variable, pct in (
         ("internet", "WFH_INTERNET_PCT", wfh.internet_pct),
         ("phone", "WFH_PHONE_PCT", wfh.phone_pct),
@@ -178,6 +180,9 @@ def _actual_cost_rows(
         tally = by_kind[label]
         amount = None if pct is None else _share(tally.total_aud, pct)
         detail = "" if pct is None else f"{label} bills AUD {tally.total_aud:.2f} x {pct:f}%"
+        if pct is not None and tally.count == 0:
+            empty.append(f"no {label} bills found")
+            detail = empty[-1]
         parts.append(
             (label, variable, amount, "; ".join(item for item in (detail, tally.note) if item))
         )
@@ -200,16 +205,18 @@ def _actual_cost_rows(
                 EstimateRow("wfh_actual_cost", label, currency=AUD, amount_aud=amount, notes=note)
             )
     total = sum(computed, Decimal(0)) if computed else None
-    if not missing:
+    gaps = [f"not computed: set {', '.join(missing)}"] if missing else []
+    gaps.extend(empty)
+    if not gaps:
         total_note = ""
     elif computed:
-        total_note = f"partial; not computed: set {', '.join(missing)}"
+        total_note = f"partial; {'; '.join(gaps)}"
     else:
-        total_note = f"not computed: set {', '.join(missing)}"
+        total_note = gaps[0]
     rows.append(
         EstimateRow("wfh_actual_cost", "total", currency=AUD, amount_aud=total, notes=total_note)
     )
-    return rows, total, missing
+    return rows, total, total_note
 
 
 def _share(total: Decimal, pct: Decimal) -> Decimal:
@@ -220,7 +227,7 @@ def _scenario_rows(
     deductions_aud: Decimal,
     fixed: Decimal | None,
     actual: Decimal | None,
-    actual_missing: Sequence[str],
+    actual_note: str,
 ) -> list[EstimateRow]:
     rows: list[EstimateRow] = []
     if fixed is not None:
@@ -235,8 +242,8 @@ def _scenario_rows(
         )
     if actual is not None:
         note = SCENARIO_NOTE
-        if actual_missing:
-            note += f"; partial, not computed: {', '.join(actual_missing)}"
+        if actual_note.startswith("partial"):
+            note += f"; {actual_note}"
         rows.append(
             EstimateRow(
                 "wfh_scenarios",

@@ -10,7 +10,7 @@ written last. ``dry_run`` runs the same guards and rendering but writes nothing.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -85,6 +85,7 @@ class ExportResult:
     estimate_pending_aud: Decimal = Decimal(0)
     estimated_saving: Decimal | None = None
     bills_count: int = 0
+    bills_counted: int = 0
     bills_aud: Decimal = Decimal(0)
 
 
@@ -185,7 +186,7 @@ def run_export(
         ),
         *_asset_reviewed_tag_warnings(settings, context, classification),
         *_missing_rate_warnings(estimate),
-        *_bills_warnings(settings.bill_document_type, bills_found, bill_rows),
+        *_bills_warnings(settings, bills_found, bill_rows, context.tags.values()),
     )
     investment_rows = tuple(_investment_row(document, context) for document in investment_documents)
 
@@ -240,6 +241,7 @@ def run_export(
         estimate_pending_aud=estimate.pending_aud,
         estimated_saving=estimate.tax_saving,
         bills_count=len(bill_rows),
+        bills_counted=sum(1 for row in bill_rows if row.counts_toward_wfh),
         bills_aud=estimate.bills_aud,
     )
 
@@ -317,19 +319,41 @@ def _missing_rate_warnings(estimate: Estimate) -> tuple[str, ...]:
     )
 
 
-def _bills_warnings(type_name: str, found: bool, bill_rows: Sequence[BillRow]) -> tuple[str, ...]:
-    """Non-fatal findings about the bills, in stable order: a missing type, then overlaps."""
+def _bills_warnings(
+    settings: Settings,
+    found: bool,
+    bill_rows: Sequence[BillRow],
+    tag_names: Collection[str],
+) -> tuple[str, ...]:
+    """Non-fatal findings about the bills, in stable order.
+
+    A missing type, then kind tags missing from Paperless (only when bills are listed), then
+    one line per bill that also carries the deduction tag.
+    """
     missing = (
         ()
         if found
-        else (f"document type {type_name!r} not found in Paperless; bills.csv has no rows",)
+        else (
+            f"document type {settings.bill_document_type!r} not found in Paperless; "
+            "bills.csv has no rows",
+        )
+    )
+    absent = sorted(set(settings.bill_kind_tags.values()).difference(tag_names))
+    missing_tags = (
+        (
+            f"bill kind tags not found in Paperless: {', '.join(absent)}; names match "
+            "case-sensitively and bills cannot get those kinds",
+        )
+        if bill_rows and absent
+        else ()
     )
     overlaps = tuple(
         f"document {document_id} is a bill and carries the deduction tag; it stays in "
-        "deductions.csv and is excluded from the bill totals and WFH figures in estimate.csv"
+        "deductions.csv or review.csv and is excluded from the bill totals and WFH figures "
+        "in estimate.csv"
         for document_id in bills_also_deductions(bill_rows)
     )
-    return (*missing, *overlaps)
+    return (*missing, *missing_tags, *overlaps)
 
 
 def unconfigured_field_notes(settings: Settings) -> tuple[str, ...]:

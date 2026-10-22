@@ -357,7 +357,10 @@ def _run_export_command(settings: Settings, token: str, args: argparse.Namespace
     )
     print(_estimate_summary(result))
     if result.bills_count:
-        print(f"bills: {result.bills_count} listed, AUD {result.bills_aud:.2f}")
+        print(
+            f"bills: {result.bills_count} listed, {result.bills_counted} counted, "
+            f"AUD {result.bills_aud:.2f}"
+        )
     print(
         f"tagged {result.tagged_total}, out of FY {result.out_of_fy_count}, "
         f"selected in FY {result.selected_count}, investments {result.investments_count}"
