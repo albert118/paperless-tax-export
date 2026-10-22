@@ -197,6 +197,7 @@ def run_audit(
     field_amount: str | None,
     field_gst: str | None,
     field_work_use: str | None,
+    field_date: str | None = None,
     base_url: str = "",
 ) -> AuditReport:
     """Gather lenient diagnostic findings from the live Paperless instance.
@@ -280,6 +281,7 @@ def run_audit(
         field_amount=field_amount,
         field_gst=field_gst,
         field_work_use=field_work_use,
+        field_date=field_date,
     )
 
     return AuditReport(
@@ -515,6 +517,7 @@ def _expected_fields(
     field_amount: str | None,
     field_gst: str | None,
     field_work_use: str | None,
+    field_date: str | None,
 ) -> tuple[ExpectedFieldInfo, ...]:
     """Check the expected field names by exact name against the live fields.
 
@@ -526,6 +529,7 @@ def _expected_fields(
         (field_amount, True),
         (field_gst, False),
         (field_work_use, False),
+        (field_date, False),
     ):
         if name is None:
             continue
@@ -700,8 +704,9 @@ def render(report: AuditReport) -> str:
             lines.append(f"  - {info.name!r}{marker}: missing from Paperless")
     lines.append("  Note: Settings.field_date and Settings.field_supplier may be None;")
     lines.append("  a None field is not configured and is never reported as missing.")
-    lines.append("  The row date falls back to the document `created` date and the")
-    lines.append("  supplier to the document correspondent.")
+    lines.append("  The row date falls back to the document `created` date when the date")
+    lines.append("  field is not configured or has no value, and the supplier to the")
+    lines.append("  document correspondent.")
 
     lines.append("")
     lines.append(f"Paperless API version: {report.api_version or 'unknown'}")

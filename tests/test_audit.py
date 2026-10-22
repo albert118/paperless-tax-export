@@ -87,6 +87,7 @@ def _run(
     field_amount: str = "Gross Amount",
     field_gst: str = "GST Amount",
     field_work_use: str = "Claimable %",
+    field_date: str | None = "Transaction Date",
     base_url: str = "",
 ) -> AuditReport:
     client = make_client(handler)
@@ -100,6 +101,7 @@ def _run(
         field_amount=field_amount,
         field_gst=field_gst,
         field_work_use=field_work_use,
+        field_date=field_date,
         base_url=base_url,
     )
 
@@ -375,6 +377,39 @@ def test_missing_required_field_is_reported_not_raised() -> None:
     assert by_name["Gross Amount"].required is True
     assert by_name["GST Amount"].exists is False
     assert by_name["Claimable %"].exists is False
+    assert by_name["Transaction Date"].exists is False
+
+
+def test_date_field_is_checked_as_optional_with_coverage() -> None:
+    fields = [
+        custom_field_payload(10, "Gross Amount"),
+        custom_field_payload(12, "Transaction Date"),
+    ]
+    documents = [
+        _doc(1, custom_fields=[{"field": 12, "value": "2025-10-01"}]),
+        _doc(2, custom_fields=[{"field": 12, "value": None}]),
+        _doc(3, custom_fields=[]),
+    ]
+    report = _run(
+        _make_handler(
+            tags=[tag_payload(1, "tax-deductible", document_count=3)],
+            documents=documents,
+            fields=fields,
+        )
+    )
+    info = {item.name: item for item in report.expected_fields}["Transaction Date"]
+    assert info.exists is True
+    assert info.required is False
+    assert info.coverage is not None and (
+        info.coverage.present_count,
+        info.coverage.null_count,
+        info.coverage.absent_count,
+    ) == (1, 1, 1)
+
+
+def test_unconfigured_date_field_is_not_reported() -> None:
+    report = _run(_make_handler(), field_date=None)
+    assert "Transaction Date" not in {info.name for info in report.expected_fields}
 
 
 def test_duplicate_tag_names_are_findings_not_errors() -> None:
