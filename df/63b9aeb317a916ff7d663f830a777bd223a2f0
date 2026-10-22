@@ -1,0 +1,151 @@
+src/paperless_tax_export/estimate.py
+  s_b0836905a23abc::t_ddc540636d3c82 1-19,21,23-26,28-54,59-91,106-110,113-168,173-183,185,192,194-216,218-219,221-237,269,270-320,325-331,333-352,356-362,364-399
+  s_b0836905a23abc::t_d4326897538df5 400
+  s_f52efff3db3665::t_b8552e7922c36f 22,27,55-58,111-112,169-172,241-242,247-250,252-266,269,332
+  s_5581b3dd4a496b::t_d7b69e81e487a4 20,92-105,184,186-191,193,217,220,238,241-243,249,321-323,353-355,363
+  s_b0836905a23abc::t_fc9ce2cedd2551 246,267
+  s_b0836905a23abc::t_996345d85f2f3e 239,244-245,251,268,324
+tests/test_estimate.py
+  s_b0836905a23abc::t_d5b724fc90c510 1-20,22-121,124-402,407-645
+  s_b0836905a23abc::t_48293191deda63 646-648
+  s_b0836905a23abc::t_1badc11ae7f190 649-650
+  s_f52efff3db3665::t_5c501bd440d55a 21,122-123,403-406,651-765
+src/paperless_tax_export/csv_output.py
+  s_b0836905a23abc::t_78cc5396fcb03f 108
+  s_b0836905a23abc::t_079ef699fa8770 107
+  s_b0836905a23abc::t_41a9521f772094 109-111
+  s_f52efff3db3665::t_5c5622ad655c83 18,99,102,112-119,153,155-156
+AGENTS.md
+  s_b0836905a23abc::t_51477a1daa9026 20-21,38,42,44-49
+  s_b0836905a23abc::t_f29cfcfd553713 19,22
+  s_b0836905a23abc::t_54c020f48a80a2 35-37
+  s_b0836905a23abc::t_1a1ca340ed4ddf 43
+  s_b0836905a23abc::t_87858723cf25e5 51-61
+  s_b0836905a23abc::t_1b2f5980af0119 23-24,62-77
+README.md
+  s_b0836905a23abc::t_99ccdc4b18f271 295-298,300-313,317-331,335,341-377,381-394
+  s_f52efff3db3665::t_35b79ec8164d2d 240,244,316,332-334,336-340,378-380
+  s_b0836905a23abc::t_4317437b6e2ec2 395-425,430-438,441-480,482,486-505,510-515
+  s_b0836905a23abc::t_7addf6c35110df 314
+  s_b0836905a23abc::t_3b3e89eb6c365b 22
+  s_b0836905a23abc::t_f943892a4ebc69 220-221
+  s_b0836905a23abc::t_93d8b2147e4ee3 299
+  s_b0836905a23abc::t_ef9bfdb6a00e7b 426-429,439-440,481,483-485,506-509
+  s_b0836905a23abc::t_b52e89a73abd8d 23,241-243,315,516-599
+src/paperless_tax_export/cli.py
+  s_b0836905a23abc::t_d0cc422e3c387b 24,29,145,217-226,295-296,357,377-386
+  s_b0836905a23abc::t_50b683a7928678 26,143-144,297,358
+  s_5581b3dd4a496b::t_df196898f218fb 359-362
+  s_b0836905a23abc::t_57f444b29c62c8 363-364,387-394
+src/paperless_tax_export/env_config.py
+  s_b0836905a23abc::t_0a3c2effe2e769 16,22,28,97-116
+  s_b0836905a23abc::t_99c61690cb814b 23,29-33,117-149
+src/paperless_tax_export/export.py
+  s_b0836905a23abc::t_d0834ee406571a 15,34-40,44,88-90,121,193,200,206,226,243,260-262,336-345
+  s_5581b3dd4a496b::t_e0236009ffb69f 18-23,42,61,66,91,93,181-184,194-198,225,237,263,265,357-359,373-375,378-379,381-382
+  s_5581b3dd4a496b::t_c8640ee4a5f12a 13,92,207,264,346-356,360-372,376-377,380
+  s_b0836905a23abc::t_aab78f67ca978f 54-57,94-97,126,185-192,199,208,238,266-269
+src/paperless_tax_export/manifest.py
+  s_b0836905a23abc::t_6ba10601e63289 25,63,82-85
+  s_b0836905a23abc::t_2c21a05209000e 15,24,52,86-87,90-94,103,110-114
+  s_b0836905a23abc::t_adf51a718d4783 53,88-89,104
+src/paperless_tax_export/settings.py
+  s_b0836905a23abc::t_eb383812a3823b 16,90-91,124-129
+  s_b0836905a23abc::t_6bb8d1699d637b 14-15,23-25,43-67,92-93,96,130-132,146-156
+  s_5581b3dd4a496b::t_e1a34875292e38 133-138
+  s_b0836905a23abc::t_e1b999e694c173 26-42,94-95,139-141,157-169
+src/paperless_tax_export/verify.py
+  s_b0836905a23abc::t_59e8719cd4dda3 30
+  s_b0836905a23abc::t_3b21794f272f42 28,38,194
+tests/conftest.py
+  s_b0836905a23abc::t_854a3e7f32e111 13,28,31,34-35
+  s_5581b3dd4a496b::t_7c1aacf3075e73 19-25,29-30,32-33,51-54
+  s_b0836905a23abc::t_20a2baca2fccf3 139-148
+tests/test_manifest.py
+  s_b0836905a23abc::t_929b9148d3f384 35-38,40-42,289
+  s_5581b3dd4a496b::t_26dfc40df83aa4 39,109-110,116-117,329-335,355
+  s_b0836905a23abc::t_3088f955eb1f21 14,92-97,111-115,356
+tests/test_verify.py
+  s_b0836905a23abc::t_ac000ce098165e 343-353,389-399,557
+  s_b0836905a23abc::t_b31bb054e29a35 373
+  s_b0836905a23abc::t_66dfbc16404dc0 370-372
+  s_b0836905a23abc::t_0b1cf781bc6e12 374-376
+  s_5581b3dd4a496b::t_2b6d641d3ed7fa 27,80,96,157,354-369,377-388,556,596-602
+  s_b0836905a23abc::t_201628f81373e5 81,603
+src/paperless_tax_export/errors.py
+  s_b0836905a23abc::t_d16f73c523271c 70-75
+tests/test_bills.py
+  s_b0836905a23abc::t_1ed160cd04681b 1-374,377-595,597-665,667-836,838-866
+  s_b0836905a23abc::t_a1ed6ff0919a4d 867-869
+  s_5581b3dd4a496b::t_7b86a3227d5642 870-900,902-904,906-918
+  s_5581b3dd4a496b::t_38c3b66f0d9eb5 375-376,596,837,919-1026
+  s_b0836905a23abc::t_28c0f47c670184 666,901,905
+examples/README.md
+  s_b0836905a23abc::t_04478b10b99b86 54-56
+src/paperless_tax_export/bills.py
+  s_b0836905a23abc::t_b66deb190842da 158-159
+  s_b0836905a23abc::t_b8cb5428fba397 1-157,160-182
+  s_b0836905a23abc::t_987c97abaa0f51 183-184
+src/paperless_tax_export/wfh_estimate.py
+  s_b0836905a23abc::t_b216786dd9318c 1-40,44-117,119,121-171,174,176-182,186-207,211-212,214,216-218,220-229,231-244,247-254
+  s_b0836905a23abc::t_4eb116a9e0d6cc 255-256
+  s_5581b3dd4a496b::t_44be06036c08bc 41-43,118,120,172-173,175,183-185,208-210,213,215,219,230,245-246
+src/paperless_tax_export/client.py
+  s_5581b3dd4a496b::t_6e014713eaefab 122,128-129,131-134,144-145
+src/paperless_tax_export/selection.py
+  s_5581b3dd4a496b::t_f0a33f36410b9c 16,153-195
+tests/test_ibkr_index.py
+  s_5581b3dd4a496b::t_aa601331c76dab 67-68,74-75,160,162
+  s_b0836905a23abc::t_32ba5ab4095477 11,57-62,69-73
+src/paperless_tax_export/classify.py
+  s_b0836905a23abc::t_7a6344cf68fd42 200,271
+src/paperless_tax_export/payslips.py
+  s_b0836905a23abc::t_269910cc059c4c 1-383
+  s_b0836905a23abc::t_f21eba6fe1986c 384-386
+  s_b0836905a23abc::t_3a59e277cb3f36 387-388
+tests/test_payslips.py
+  s_b0836905a23abc::t_fb44e552d5960e 1-722
+  s_b0836905a23abc::t_134e73647cf4c6 723-725
+tests/test_settings.py
+  s_b0836905a23abc::t_4f31288fc2f510 137-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "df63b9aeb317a916ff7d663f830a777bd223a2f0",
+  "prompts": {},
+  "sessions": {
+    "s_5581b3dd4a496b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a4c6eb5b51b450f79",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_6b4fdd01efd6c5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a8378515e457163fe",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_b0836905a23abc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a1d81a5f-b53b-447c-a1c6-b0754b2d849e",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_f52efff3db3665": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-accf4b6401be521cb",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
