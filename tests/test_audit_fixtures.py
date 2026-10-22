@@ -279,12 +279,11 @@ def test_v0_1_0_recording_keeps_the_origin_rewrite_visible() -> None:
 
 
 def test_v0_1_0_recording_does_not_list_the_date_field_among_expected_fields() -> None:
-    """Records today's audit gap: `Settings.field_date` is configured but not audited.
+    """This recording predates the audit's check of `Settings.field_date`.
 
-    `expected_fields` covers the amount, GST and work-use settings only, so a
-    renamed `Transaction Date` field would not be reported as missing. When the
-    audit starts checking the date field, this recording predates it and the
-    assertion below documents the difference rather than a requirement.
+    Its `expected_fields` cover the amount, GST and work-use settings only. The
+    live audit now also reports the date field, so the assertion below documents
+    how the recording differs rather than a requirement.
     """
     settings = Settings()
     recorded = _load_record(_V010_RECORD)

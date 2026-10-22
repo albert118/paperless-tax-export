@@ -170,8 +170,8 @@ failing:
   IBKR selection is correspondent-only;
 - the configured `--tax-info-tag` (default `tax-information`): exists, document count and
   near-misses, reported with a caveat that it is general tax metadata, not IBKR-specific;
-- whether the expected field names exist (`Transaction Amount` is required; `GST Amount`
-  and `Claimable %` are optional), and the Paperless API/server versions.
+- whether the expected field names exist (`Transaction Amount` is required; `GST Amount`,
+  `Claimable %` and `Transaction Date` are optional), and the Paperless API/server versions.
 
 The audit is a diagnostic, not a gate: missing tags, missing fields and zero coverage
 are findings and the exit code stays 0. Endpoints the token cannot read are recorded in
