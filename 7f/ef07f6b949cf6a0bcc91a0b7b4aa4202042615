@@ -1,0 +1,19 @@
+tests/test_csv_output.py
+  s_8683f49309b5d9::t_507a200da71b68 311
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7fef07f6b949cf6a0bcc91a0b7b4aa4202042615",
+  "prompts": {},
+  "sessions": {
+    "s_8683f49309b5d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-aeefdea26831a0459",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
