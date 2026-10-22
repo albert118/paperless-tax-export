@@ -67,6 +67,12 @@ class CountGuardError(TaxExportError):
     exit_code = EXIT_GUARD
 
 
+class EstimateError(TaxExportError):
+    """An amount is too large for the estimate arithmetic."""
+
+    exit_code = EXIT_GUARD
+
+
 class ManifestError(TaxExportError):
     """``manifest.json`` is missing, unreadable, not JSON or lacks the expected shape."""
 

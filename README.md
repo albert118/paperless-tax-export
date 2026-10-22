@@ -19,6 +19,7 @@ To run it in Docker next to Paperless-ngx, see [examples/README.md](examples/REA
 | `review.csv` | Documents that need a human decision, with reason codes. The priority output. |
 | `deductions.csv` | Documents that pass every check. |
 | `investments.csv` | Index of the investing portfolio statements for the year: the documents of the one configured correspondent (`--ibkr-correspondent`, default `Interactive Brokers`). Header only, plus a warning, when the correspondent is missing. A document that also carries the deduction tag appears here and in the deduction outputs, with a warning. |
+| `estimate.csv` | An estimate of total deductions in AUD, with a separate pending figure and an optional tax saving. An estimate, not tax advice. See [The estimate](#the-estimate). |
 | `manifest.json` | Run parameters, tool and Paperless versions, counts, expected count, and SHA-256 and row count of each other output. No timestamp. |
 
 All files go into `output/`, which is never committed.
@@ -234,6 +235,8 @@ file, as it should, so run it straight after a run or against a copy.
 A manifest written by 0.2.x lists `ibkr-documents.csv` and `counts.ibkr_count`, so `verify`
 rejects it with exit 2. Re-run `run` to produce a current manifest.
 
+`estimate.csv` is a required output: a manifest that does not list it also exits 2, naming it.
+
 ## The Paperless token
 
 The token is never committed and never pasted into a file that is tracked by git.
@@ -283,6 +286,104 @@ the same file:
 ```sh
 uv run paperless-tax-export audit --env-file /path/to/paperless.env
 ```
+
+## The estimate
+
+`run` also writes `estimate.csv`: an estimate of total deductions, built only from the
+document amounts of that run. It is an estimate, not tax advice, and it ignores the rest
+of your return. `manifest.json` records it as a fourth output, so `verify` checks it.
+
+`estimate.csv` has these columns, in order: `section`, `label`, `count`, `currency`,
+`amount`, `rate_to_aud`, `amount_aud`, `notes`. It follows the same byte contract as the
+other CSVs (UTF-8 with BOM, `\r\n`, text cells guarded against formula injection,
+two-decimal amounts; `rate_to_aud` is written as supplied). The rows are in this fixed
+order:
+
+| `section` | `label` | What it holds |
+| --- | --- | --- |
+| `estimate` | `ESTIMATE only; not tax advice` | The first data row. `notes` says the figures come from this run's document amounts, the rates file and the marginal rate you supplied, and ignore the rest of your return. |
+| `deductions` | `total` | `count` is the number of `deductions.csv` rows, `amount_aud` the AUD total of what is claimable now. |
+| `deductions_currency` | currency code | One row per currency in `deductions.csv`, sorted by code: `count`, the native total in `amount`, the rate used in `rate_to_aud` (blank for AUD or when there is none) and the converted total in `amount_aud` (blank when there is no rate; `notes` says `no rate; excluded from the AUD total`). |
+| `deductions_by_type` | document type, `(none)` when blank | `count` and the AUD total of converted amounts, sorted by type name. |
+| `deductions_by_month` | `YYYY-MM` of the row date | `count` and the AUD total of converted amounts, sorted ascending. |
+| `pending` | `review rows with an amount` | The `review.csv` rows that have an amount: `count` and their AUD total, negatives included. These are not claimable yet. It is an upper bound: it includes suspected duplicates and items that may never be deductions (the `notes` cell says so). |
+| `pending_no_amount` | `review rows without an amount` | `count` of the `review.csv` rows with no amount. |
+| `tax_saving` | `estimated saving at marginal rate <rate>` | Only when `TAX_MARGINAL_RATE` is set: the deductions AUD total times the rate, in `amount_aud`. |
+
+How the figures are worked out:
+
+- Each row's AUD amount is `amount x rate`, rounded to cents with round-half-up
+  (`ROUND_HALF_UP`, so a half cent goes up and a negative half cent goes down). AUD rows use
+  rate 1. The totals are the sums of those per-row amounts, so rounding happens per row
+  before adding, not once on the sum. Two rows of 0.01 at rate 0.5 give 0.02, not 0.01.
+- The tax saving is the deductions AUD total times the marginal rate, rounded to cents
+  with round-half-up. It uses the marginal rate only. It ignores the Medicare levy,
+  offsets, thresholds and everything else in your return, which is why the row says
+  `rough`.
+- An item you cleared with the `asset-reviewed` tag is in `deductions.csv` and counts at its
+  full amount.
+- `pending` is not in the deductions total. It is an upper bound: `review.csv` also holds
+  suspected duplicates, zero or negative amounts and income-tagged items, so it includes
+  items that may never be deductions.
+- A row whose currency has no rate is excluded from every AUD figure and counted in
+  `notes` (for example `excluded, no rate: JPY 2`). Nothing is dropped silently. The
+  `count` on the `deductions`, `deductions_by_type` and `deductions_by_month` rows still
+  includes those excluded rows; only the AUD amounts leave them out.
+- Limits: a rate has at most 6 integer digits and 12 fraction digits and no leading zeros
+  (`0.5`, not `00.5`); an amount too large for the arithmetic exits 4 and writes nothing.
+
+### Exchange rates: `run --rates FILE`
+
+Foreign amounts are converted with rates you supply. The tool fetches no rates. The file
+is a CSV with the header `currency,rate_to_aud` (UTF-8, with or without a BOM). Placeholder
+example:
+
+```csv
+currency,rate_to_aud
+USD,1.50
+EUR,1.65
+```
+
+- `currency` is an uppercase three-letter code. `AUD` is not allowed (it is always 1).
+- `rate_to_aud` is a positive decimal number: AUD for one unit of the currency. No
+  exponent, sign or thousands separator.
+- A duplicate currency, an unknown or missing column, a missing header, a bad number or a
+  rate of zero or less exits 2 with a message that names the file and line, and at most the
+  column name. Nothing is written.
+- A currency in your data but not in the file is unconverted. `run` prints one warning on
+  stderr per run listing the codes (`no exchange rate for JPY, USD; ...`). With no `--rates`
+  flag every foreign amount is unconverted and the same warning appears.
+- The file's SHA-256 is recorded in `manifest.json` as `parameters.rates_file_sha256`
+  (`null` when there is no file), so you can tell which rates an estimate used. The rates
+  themselves are not copied into the manifest.
+
+### Marginal tax rate: `TAX_MARGINAL_RATE`
+
+Set `TAX_MARGINAL_RATE` to your marginal rate as a decimal fraction, for example `0.32`,
+to get the `tax_saving` row. It is optional: when it is not set there is no `tax_saving`
+row. There is no command-line flag for it. It is read like `PAPERLESS_TOKEN`: a real
+environment variable wins over an entry in the dotenv file named by `--env-file`.
+
+```dotenv
+TAX_MARGINAL_RATE=0.32
+```
+
+The value must be a plain decimal from 0 to 1 (`0` and `1` are accepted), with no leading
+zeros (`0.5`, not `00.5`) and at most 12 fraction digits, so the manifest records it exactly
+as typed. Anything else,
+including an empty value, exits 2 with a message that names the variable and where it came
+from, never the value. The rate is recorded in `manifest.json` as `parameters.marginal_rate`
+(a string, or `null`).
+
+### Console summary and `verify`
+
+`run` prints one extra line, `estimate: deductions AUD 115.00, pending AUD -5.00`, with
+`, estimated saving AUD 36.80` appended when a marginal rate is set. `--dry-run` prints the
+same line and writes nothing.
+
+`verify` requires `estimate.csv` in the manifest and checks its SHA-256 and data-row count
+like the other files. A manifest that does not list it exits 2 and names `estimate.csv`;
+re-run `run`.
 
 ## Development
 

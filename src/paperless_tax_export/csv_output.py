@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import csv
 import io
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -96,12 +96,25 @@ def _cell(row: ClassifiedRow, name: str, kind: str) -> str:
     if name == "reason_codes":
         return ";".join(code.value for code in row.reason_codes)
     raw = getattr(row, _ATTR_BY_COLUMN.get(name, name))
-    return "" if raw is None else _formula_guard(str(raw))
+    return "" if raw is None else formula_guard(str(raw))
 
 
-def _formula_guard(text: str) -> str:
+def formula_guard(text: str) -> str:
     """Prefix *text* with a single quote when it could be a spreadsheet formula."""
     return "'" + text if text.startswith(_FORMULA_PREFIXES) else text
+
+
+def render_table_bytes(header: Sequence[str], rows: Iterable[Sequence[str]]) -> bytes:
+    """Bytes of a CSV table of ready-made cells under the same byte contract (BOM, ``\\r\\n``).
+
+    The caller formats decimal cells and passes text cells through
+    :func:`formula_guard`; rows are written in the order given.
+    """
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\r\n")
+    writer.writerow(header)
+    writer.writerows(rows)
+    return buffer.getvalue().encode("utf-8-sig")
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,10 +150,10 @@ def _render_investments_csv(rows: Sequence[InvestmentRow]) -> str:
         writer.writerow(
             [
                 str(row.document_id),
-                _formula_guard(row.title),
+                formula_guard(row.title),
                 row.created,
-                _formula_guard(row.document_type or ""),
-                _formula_guard(row.correspondent or ""),
+                formula_guard(row.document_type or ""),
+                formula_guard(row.correspondent or ""),
             ]
         )
     return buffer.getvalue()

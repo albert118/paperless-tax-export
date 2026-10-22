@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 
 from paperless_tax_export.classify import Classification, ClassifyContext, classify_documents
@@ -24,8 +25,16 @@ from paperless_tax_export.csv_output import (
     render_investments_csv_bytes,
 )
 from paperless_tax_export.errors import CountGuardError
+from paperless_tax_export.estimate import (
+    Estimate,
+    Rates,
+    build_estimate,
+    load_rates,
+    render_estimate_bytes,
+)
 from paperless_tax_export.manifest import (
     DEDUCTIONS_FILE,
+    ESTIMATE_FILE,
     INVESTMENTS_FILE,
     MANIFEST_FILE,
     REVIEW_FILE,
@@ -63,6 +72,9 @@ class ExportResult:
     files: tuple[PlannedFile, ...] = ()
     dry_run: bool = False
     warnings: tuple[str, ...] = ()
+    estimate_deductions_aud: Decimal = Decimal(0)
+    estimate_pending_aud: Decimal = Decimal(0)
+    estimated_saving: Decimal | None = None
 
 
 def run_export(
@@ -86,6 +98,7 @@ def run_export(
     before anything is written. With ``dry_run`` every guard runs and the
     result is returned, but the output directory is not created.
     """
+    rates = Rates() if settings.rates_file is None else load_rates(settings.rates_file)
     deduction_tag = resolve_tag(client, settings.deduction_tag)
 
     required = [settings.field_amount] if settings.field_amount is not None else []
@@ -144,11 +157,15 @@ def run_export(
     investments_found, investment_documents = select_ibkr_documents(
         client, settings.ibkr_correspondent, settings.fy_start, settings.fy_end
     )
+    estimate = build_estimate(
+        classification.accepted, classification.review, rates.by_currency, settings.marginal_rate
+    )
     warnings = (
         *_investments_warnings(
             settings.ibkr_correspondent, investments_found, documents, investment_documents
         ),
         *_asset_reviewed_tag_warnings(settings, context, classification),
+        *_missing_rate_warnings(estimate),
     )
     investment_rows = tuple(_investment_row(document, context) for document in investment_documents)
 
@@ -165,6 +182,7 @@ def run_export(
         PlannedFile(
             INVESTMENTS_FILE, render_investments_csv_bytes(investment_rows), len(investment_rows)
         ),
+        PlannedFile(ESTIMATE_FILE, render_estimate_bytes(estimate), len(estimate.rows)),
     )
     manifest_bytes = render_manifest(
         settings,
@@ -179,6 +197,7 @@ def run_export(
         files=csv_files,
         server_version=client.server_version,
         api_version=client.api_version,
+        rates_file_sha256=rates.sha256,
     )
     manifest_file = PlannedFile(MANIFEST_FILE, manifest_bytes, rows=0)
     if not dry_run:
@@ -195,6 +214,9 @@ def run_export(
         files=(*csv_files, manifest_file),
         dry_run=dry_run,
         warnings=warnings,
+        estimate_deductions_aud=estimate.deductions_aud,
+        estimate_pending_aud=estimate.pending_aud,
+        estimated_saving=estimate.tax_saving,
     )
 
 
@@ -258,6 +280,16 @@ def _asset_reviewed_tag_warnings(
     return (
         f"asset-reviewed tag {tag_name!r} not found in Paperless; "
         "AMOUNT_OVER_300 rows cannot be cleared until it exists",
+    )
+
+
+def _missing_rate_warnings(estimate: Estimate) -> tuple[str, ...]:
+    """Warn once, listing every currency with amounts but no rate (``run --rates FILE``)."""
+    if not estimate.unconverted_currencies:
+        return ()
+    return (
+        f"no exchange rate for {', '.join(estimate.unconverted_currencies)}; those amounts are "
+        "excluded from the AUD figures in estimate.csv (supply them with run --rates FILE)",
     )
 
 

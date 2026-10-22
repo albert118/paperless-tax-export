@@ -13,15 +13,18 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 
 from dotenv import dotenv_values
 
 from paperless_tax_export.errors import SettingsError
+from paperless_tax_export.estimate import parse_positive_decimal
 
 ENV_TOKEN = "PAPERLESS_TOKEN"
 ENV_BASE_URL = "PAPERLESS_BASE_URL"
 ENV_ENV_FILE = "PAPERLESS_ENV_FILE"
+ENV_MARGINAL_RATE = "TAX_MARGINAL_RATE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +86,26 @@ def resolve_token(token_file_flag: Path | None, default_file: Path, sources: Env
             " to the env file or the default token file"
         )
     return token
+
+
+def resolve_marginal_rate(sources: EnvSources) -> Decimal | None:
+    """``TAX_MARGINAL_RATE`` (environment, then dotenv) as a ``Decimal`` in [0, 1], or ``None``.
+
+    There is no command-line flag. The value is a plain decimal fraction such as ``0.32``;
+    anything else, including an empty value, is a ``SettingsError`` naming the variable and
+    its source, never the value.
+    """
+    found = sources.lookup(ENV_MARGINAL_RATE)
+    if found is None:
+        return None
+    value, source = found
+    rate = parse_positive_decimal(value.strip())
+    if rate is None or rate > 1:
+        raise SettingsError(
+            f"{ENV_MARGINAL_RATE} from {source} must be a decimal fraction from 0 to 1,"
+            " for example 0.32"
+        )
+    return rate
 
 
 def _read_default_token_file(default_file: Path, env_file: Path | None) -> str:
