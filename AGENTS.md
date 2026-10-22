@@ -20,7 +20,8 @@ Outputs, written into `output/`:
 - `estimate.csv`: an estimate of total deductions in AUD (the sum of `deductions.csv`), a
   separate pending figure for `review.csv` rows, and an optional tax saving. Foreign amounts
   are converted with the owner's rates file (`run --rates FILE`). It also shows the bills and
-  two illustrative WFH scenarios that never change those figures. Not tax advice.
+  two illustrative WFH scenarios that never change those figures, and a payslip-based ceiling on
+  WFH hours (a bound, not evidence). Not tax advice.
 - `manifest.json`: parameters, versions, counts and file hashes.
 
 ## Current state
@@ -57,6 +58,22 @@ to the base total) read `WFH_HOURS`, `WFH_RATE_PER_HOUR`, `WFH_INTERNET_PCT` (0 
 `WFH_PHONE_PCT` (0 to 100) and `WFH_ENERGY_AMOUNT` through `EnvSources.lookup` like
 `TAX_MARGINAL_RATE` (no flags; an empty or invalid value exits 2). They are recorded as typed
 in the manifest parameters. The method assumptions behind them are the owner's, not verified.
+
+Payslip hours: `Settings.payslip_document_type` (default `salary`, exact name, selected like the
+bills with the same guards) and `Settings.payslip_fields` (key to custom field name; defaults
+`Pay Period Start`, `Pay Period End`, `Ordinary Hours`, `Annual Leave Hours`, `Personal Leave
+Hours`, `Public Holiday Hours`; all keys present, non-empty, distinct; no flags). Both are in the
+manifest parameters and `counts.payslips_count` (usable payslips) is a required count. A missing
+type or field is a warning, never fatal. A leave field with no entry counts as zero; every other
+problem makes a payslip unusable. The ceiling is ordinary hours minus leave hours, assuming
+Ordinary Hours includes leave (the owner's reading, to confirm). It bounds WFH hours and proves
+none; it never feeds the deductions, pending, tax saving or WFH scenario figures.
+
+**Payslip rules.** A separate extractor repo parses the payslips and writes the custom fields.
+This repo must not parse payslip text, must not read a document's `content`, and reads only the
+six fields above. It must not read, print or write any pay amount, tax figure or identifier from
+a payslip, and a payslip title must never appear in stdout, stderr, any CSV or the manifest
+(warnings name document ids only). Test fixtures use invented values.
 
 In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_export/`,
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,

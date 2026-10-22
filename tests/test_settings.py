@@ -149,3 +149,27 @@ def test_reviewed_tag_matching_a_custom_deduction_tag_is_a_settings_error() -> N
 
 def test_reviewed_tag_name_is_not_trimmed() -> None:
     assert Settings(asset_reviewed_tag=" x ").asset_reviewed_tag == " x "
+
+
+def test_payslip_document_type_must_not_be_empty() -> None:
+    with pytest.raises(SettingsError, match="payslip_document_type must not be empty"):
+        Settings(payslip_document_type=" ")
+
+
+def test_payslip_fields_must_have_exactly_the_known_keys() -> None:
+    fields = dict(Settings().payslip_fields)
+    del fields["public_holiday_hours"]
+    with pytest.raises(SettingsError, match="payslip_fields must map exactly these keys"):
+        Settings(payslip_fields=fields)
+    with pytest.raises(SettingsError, match="payslip_fields must map exactly these keys"):
+        Settings(payslip_fields={**Settings().payslip_fields, "net_pay": "Net Pay"})
+
+
+def test_payslip_field_names_must_not_be_empty() -> None:
+    with pytest.raises(SettingsError, match="names must not be empty"):
+        Settings(payslip_fields={**Settings().payslip_fields, "ordinary_hours": " "})
+
+
+def test_payslip_field_names_must_be_distinct() -> None:
+    with pytest.raises(SettingsError, match="different custom field for each key"):
+        Settings(payslip_fields={**Settings().payslip_fields, "period_end": "Pay Period Start"})

@@ -136,6 +136,16 @@ def custom_field_payload(
     }
 
 
+PAYSLIP_FIELD_PAYLOADS = [
+    custom_field_payload(31, "Pay Period Start", data_type="date"),
+    custom_field_payload(32, "Pay Period End", data_type="date"),
+    custom_field_payload(33, "Ordinary Hours", data_type="float"),
+    custom_field_payload(34, "Annual Leave Hours", data_type="float"),
+    custom_field_payload(35, "Personal Leave Hours", data_type="float"),
+    custom_field_payload(36, "Public Holiday Hours", data_type="float"),
+]
+
+
 def correspondent_payload(
     correspondent_id: int, name: str, document_count: int = 0
 ) -> dict[str, object]:

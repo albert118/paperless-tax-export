@@ -23,6 +23,23 @@ _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 BILL_KINDS = ("electricity", "internet", "phone", "gas")
 DEFAULT_BILL_KIND_TAGS: Mapping[str, str] = {kind: kind for kind in BILL_KINDS}
 
+PAYSLIP_FIELD_KEYS = (
+    "period_start",
+    "period_end",
+    "ordinary_hours",
+    "annual_leave_hours",
+    "personal_leave_hours",
+    "public_holiday_hours",
+)
+DEFAULT_PAYSLIP_FIELDS: Mapping[str, str] = {
+    "period_start": "Pay Period Start",
+    "period_end": "Pay Period End",
+    "ordinary_hours": "Ordinary Hours",
+    "annual_leave_hours": "Annual Leave Hours",
+    "personal_leave_hours": "Personal Leave Hours",
+    "public_holiday_hours": "Public Holiday Hours",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class WfhInputs:
@@ -74,6 +91,8 @@ class Settings:
     rates_file: Path | None = None
     bill_document_type: str = "bill"
     bill_kind_tags: Mapping[str, str] = field(default_factory=lambda: dict(DEFAULT_BILL_KIND_TAGS))
+    payslip_document_type: str = "salary"
+    payslip_fields: Mapping[str, str] = field(default_factory=lambda: dict(DEFAULT_PAYSLIP_FIELDS))
     wfh: WfhInputs = field(default_factory=WfhInputs)
     timeout_seconds: float = 30.0
 
@@ -122,6 +141,9 @@ class Settings:
                 "bill_kind_tags must not use the same tag name as deduction_tag or "
                 "asset_reviewed_tag"
             )
+        if not self.payslip_document_type.strip():
+            raise SettingsError("payslip_document_type must not be empty")
+        _validate_payslip_fields(self.payslip_fields)
         if self.timeout_seconds <= 0:
             raise SettingsError(f"timeout_seconds must be positive, got {self.timeout_seconds}")
 
@@ -135,6 +157,19 @@ def _validate_bill_kind_tags(kind_tags: Mapping[str, str]) -> None:
         raise SettingsError("bill_kind_tags tag names must not be empty")
     if len(set(names)) != len(names):
         raise SettingsError("bill_kind_tags must use a different tag for each kind")
+
+
+def _validate_payslip_fields(names_by_key: Mapping[str, str]) -> None:
+    """Raise ``SettingsError`` unless every payslip field has one non-empty, distinct name."""
+    if set(names_by_key) != set(PAYSLIP_FIELD_KEYS):
+        raise SettingsError(
+            f"payslip_fields must map exactly these keys: {', '.join(PAYSLIP_FIELD_KEYS)}"
+        )
+    names = list(names_by_key.values())
+    if any(not name.strip() for name in names):
+        raise SettingsError("payslip_fields custom field names must not be empty")
+    if len(set(names)) != len(names):
+        raise SettingsError("payslip_fields must use a different custom field for each key")
 
 
 def _validate_iso_date(value: str, name: str) -> None:

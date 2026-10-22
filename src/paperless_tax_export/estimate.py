@@ -236,18 +236,19 @@ def build_estimate(
     rates: Mapping[str, Decimal],
     marginal_rate: Decimal | None,
     bills_section: Callable[[Decimal], BillsSection] | None = None,
+    payslip_rows: Sequence[EstimateRow] = (),
 ) -> Estimate:
     """Compute the estimate rows in their fixed order from the run's classified rows.
 
     *bills_section*, when given, is called with the deductions total and returns the bill and
-    WFH rows; they follow ``deductions_by_month`` and precede ``pending``. They never change
-    the deductions, pending or tax-saving figures.
+    WFH rows; they follow ``deductions_by_month`` and precede ``pending``. *payslip_rows* follow
+    them. Neither changes the deductions, pending or tax-saving figures.
 
     Raises ``EstimateError`` (exit 4, no value in the message) when an amount is so large
     that the ``Decimal`` arithmetic overflows its context.
     """
     try:
-        return _build_estimate(accepted, review, rates, marginal_rate, bills_section)
+        return _build_estimate(accepted, review, rates, marginal_rate, bills_section, payslip_rows)
     except InvalidOperation as exc:
         raise EstimateError(
             "an amount is too large for the estimate arithmetic; check the document amounts"
@@ -264,6 +265,7 @@ def _build_estimate(
     rates: Mapping[str, Decimal],
     marginal_rate: Decimal | None,
     bills_section: Callable[[Decimal], BillsSection] | None,
+    payslip_rows: Sequence[EstimateRow],
 ) -> Estimate:
     claimable = _tally_rows(accepted, rates)
     pending = _tally_rows([row for row in review if row.amount_inc_gst is not None], rates)
@@ -319,6 +321,7 @@ def _build_estimate(
     bills = None if bills_section is None else bills_section(total.total_aud)
     if bills is not None:
         rows.extend(bills.rows)
+    rows.extend(payslip_rows)
     rows.append(
         EstimateRow(
             "pending",

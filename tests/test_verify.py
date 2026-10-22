@@ -78,6 +78,7 @@ def _counts(accepted: int, review: int, investments: int) -> dict[str, int]:
         "review": review,
         "investments_count": investments,
         "bills_count": 0,
+        "payslips_count": 0,
     }
 
 
@@ -645,6 +646,7 @@ def test_check_consistency_skips_files_without_a_measured_row_count() -> None:
         review=1,
         investments_count=0,
         bills_count=0,
+        payslips_count=0,
     )
     assert check_consistency(counts, {}) == ()
     assert check_consistency(counts, {"deductions.csv": 1, "review.csv": 1}) == ()
