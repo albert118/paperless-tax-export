@@ -83,3 +83,12 @@ class VerificationError(TaxExportError):
     """An output file, row count or manifest count disagrees with the manifest."""
 
     exit_code = EXIT_GUARD
+
+
+class DownloadError(TaxExportError):
+    """A downloaded original failed an integrity check or the pack cannot be built.
+
+    Messages name the document id only, never a title or any content.
+    """
+
+    exit_code = EXIT_GUARD
