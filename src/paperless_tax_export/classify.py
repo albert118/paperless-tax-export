@@ -197,7 +197,7 @@ def _classify_document(document: Document, context: ClassifyContext) -> _Classif
     else:
         default_currency = amount_field.default_currency() or settings.default_currency
         parsed_amount = parse_amount(
-            _amount_raw(document.field_value(amount_field.id)),
+            amount_raw(document.field_value(amount_field.id)),
             default_currency=default_currency,
         )
         amount = parsed_amount.amount
@@ -268,7 +268,7 @@ def _order_codes(codes: set[ReviewCode]) -> tuple[ReviewCode, ...]:
     return tuple(sorted(codes, key=_CODE_ORDER.index))
 
 
-def _amount_raw(value: CustomFieldValueType) -> str | int | None:
+def amount_raw(value: CustomFieldValueType) -> str | int | None:
     """Normalise a custom-field value for amount parsing (``float`` → str)."""
     if value is None:
         return None

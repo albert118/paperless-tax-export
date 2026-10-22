@@ -20,11 +20,17 @@ from dotenv import dotenv_values
 
 from paperless_tax_export.errors import SettingsError
 from paperless_tax_export.estimate import parse_positive_decimal
+from paperless_tax_export.settings import WfhInputs
 
 ENV_TOKEN = "PAPERLESS_TOKEN"
 ENV_BASE_URL = "PAPERLESS_BASE_URL"
 ENV_ENV_FILE = "PAPERLESS_ENV_FILE"
 ENV_MARGINAL_RATE = "TAX_MARGINAL_RATE"
+ENV_WFH_HOURS = "WFH_HOURS"
+ENV_WFH_RATE_PER_HOUR = "WFH_RATE_PER_HOUR"
+ENV_WFH_INTERNET_PCT = "WFH_INTERNET_PCT"
+ENV_WFH_PHONE_PCT = "WFH_PHONE_PCT"
+ENV_WFH_ENERGY_AMOUNT = "WFH_ENERGY_AMOUNT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +112,39 @@ def resolve_marginal_rate(sources: EnvSources) -> Decimal | None:
             " for example 0.32"
         )
     return rate
+
+
+def resolve_wfh_inputs(sources: EnvSources) -> WfhInputs:
+    """The five ``WFH_*`` variables (environment, then dotenv); each one unset is ``None``.
+
+    There are no command-line flags. ``WFH_HOURS``, ``WFH_RATE_PER_HOUR`` and
+    ``WFH_ENERGY_AMOUNT`` are non-negative decimals; ``WFH_INTERNET_PCT`` and
+    ``WFH_PHONE_PCT`` are percentages from 0 to 100. Anything else, including an empty
+    value, is a ``SettingsError`` naming the variable and its source, never the value.
+    """
+    return WfhInputs(
+        hours=_resolve_decimal(sources, ENV_WFH_HOURS, maximum=None),
+        rate_per_hour=_resolve_decimal(sources, ENV_WFH_RATE_PER_HOUR, maximum=None),
+        internet_pct=_resolve_decimal(sources, ENV_WFH_INTERNET_PCT, maximum=Decimal(100)),
+        phone_pct=_resolve_decimal(sources, ENV_WFH_PHONE_PCT, maximum=Decimal(100)),
+        energy_amount=_resolve_decimal(sources, ENV_WFH_ENERGY_AMOUNT, maximum=None),
+    )
+
+
+def _resolve_decimal(sources: EnvSources, name: str, *, maximum: Decimal | None) -> Decimal | None:
+    found = sources.lookup(name)
+    if found is None:
+        return None
+    value, source = found
+    number = parse_positive_decimal(value.strip())
+    if number is None or (maximum is not None and number > maximum):
+        expected = (
+            "a non-negative decimal number"
+            if maximum is None
+            else f"a decimal percentage from 0 to {maximum}"
+        )
+        raise SettingsError(f"{name} from {source} must be {expected}")
+    return number
 
 
 def _read_default_token_file(default_file: Path, env_file: Path | None) -> str:

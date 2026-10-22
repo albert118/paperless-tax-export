@@ -58,7 +58,11 @@ def make_handler(
         if path == "/api/correspondents/":
             return json_response(page_payload(list(correspondents)))
         if path == "/api/document_types/":
-            return json_response(page_payload([document_type_payload(6, "Statement")]))
+            return json_response(
+                page_payload(
+                    [document_type_payload(6, "Statement"), document_type_payload(7, "bill")]
+                )
+            )
         if path == "/api/documents/":
             found = [
                 document for document in documents if paperless_filter_matches(document, params)
@@ -143,9 +147,9 @@ def test_strict_mock_ignores_the_misspelt_plural_filter_name() -> None:
     assert paperless_filter_matches(other, params) is True
 
 
-def test_list_documents_without_tag_or_correspondent_is_rejected() -> None:
+def test_list_documents_without_tag_correspondent_or_type_is_rejected() -> None:
     client = make_client(lambda request: json_response(page_payload([])))
-    with pytest.raises(ValueError, match="tag_id or a correspondent_id"):
+    with pytest.raises(ValueError, match="tag_id, a correspondent_id or a document_type_id"):
         client.list_documents(created_from="2025-07-01", created_to="2026-06-30")
 
 

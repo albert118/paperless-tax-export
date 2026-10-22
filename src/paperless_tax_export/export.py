@@ -10,11 +10,17 @@ written last. ``dry_run`` runs the same guards and rendering but writes nothing.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
+from paperless_tax_export.bills import (
+    BillRow,
+    bills_also_deductions,
+    build_bill_rows,
+    render_bills_bytes,
+)
 from paperless_tax_export.classify import Classification, ClassifyContext, classify_documents
 from paperless_tax_export.client import PaperlessClient
 from paperless_tax_export.csv_output import (
@@ -33,6 +39,7 @@ from paperless_tax_export.estimate import (
     render_estimate_bytes,
 )
 from paperless_tax_export.manifest import (
+    BILLS_FILE,
     DEDUCTIONS_FILE,
     ESTIMATE_FILE,
     INVESTMENTS_FILE,
@@ -47,10 +54,12 @@ from paperless_tax_export.parsing import ReviewCode
 from paperless_tax_export.selection import (
     resolve_fields,
     resolve_tag,
+    select_bill_documents,
     select_documents,
     select_ibkr_documents,
 )
 from paperless_tax_export.settings import Settings
+from paperless_tax_export.wfh_estimate import make_bills_section
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +84,9 @@ class ExportResult:
     estimate_deductions_aud: Decimal = Decimal(0)
     estimate_pending_aud: Decimal = Decimal(0)
     estimated_saving: Decimal | None = None
+    bills_count: int = 0
+    bills_counted: int = 0
+    bills_aud: Decimal = Decimal(0)
 
 
 def run_export(
@@ -157,8 +169,16 @@ def run_export(
     investments_found, investment_documents = select_ibkr_documents(
         client, settings.ibkr_correspondent, settings.fy_start, settings.fy_end
     )
+    bills_found, bill_documents = select_bill_documents(
+        client, document_types, settings.bill_document_type, settings.fy_start, settings.fy_end
+    )
+    bill_rows = build_bill_rows(bill_documents, context, deduction_tag.id)
     estimate = build_estimate(
-        classification.accepted, classification.review, rates.by_currency, settings.marginal_rate
+        classification.accepted,
+        classification.review,
+        rates.by_currency,
+        settings.marginal_rate,
+        make_bills_section(bill_rows, rates.by_currency, settings.wfh),
     )
     warnings = (
         *_investments_warnings(
@@ -166,6 +186,7 @@ def run_export(
         ),
         *_asset_reviewed_tag_warnings(settings, context, classification),
         *_missing_rate_warnings(estimate),
+        *_bills_warnings(settings, bills_found, bill_rows, context.tags.values()),
     )
     investment_rows = tuple(_investment_row(document, context) for document in investment_documents)
 
@@ -182,6 +203,7 @@ def run_export(
         PlannedFile(
             INVESTMENTS_FILE, render_investments_csv_bytes(investment_rows), len(investment_rows)
         ),
+        PlannedFile(BILLS_FILE, render_bills_bytes(bill_rows), len(bill_rows)),
         PlannedFile(ESTIMATE_FILE, render_estimate_bytes(estimate), len(estimate.rows)),
     )
     manifest_bytes = render_manifest(
@@ -193,6 +215,7 @@ def run_export(
             accepted=len(deductions_rows),
             review=len(review_rows),
             investments_count=len(investment_rows),
+            bills_count=len(bill_rows),
         ),
         files=csv_files,
         server_version=client.server_version,
@@ -217,6 +240,9 @@ def run_export(
         estimate_deductions_aud=estimate.deductions_aud,
         estimate_pending_aud=estimate.pending_aud,
         estimated_saving=estimate.tax_saving,
+        bills_count=len(bill_rows),
+        bills_counted=sum(1 for row in bill_rows if row.counts_toward_wfh),
+        bills_aud=estimate.bills_aud,
     )
 
 
@@ -291,6 +317,43 @@ def _missing_rate_warnings(estimate: Estimate) -> tuple[str, ...]:
         f"no exchange rate for {', '.join(estimate.unconverted_currencies)}; those amounts are "
         "excluded from the AUD figures in estimate.csv (supply them with run --rates FILE)",
     )
+
+
+def _bills_warnings(
+    settings: Settings,
+    found: bool,
+    bill_rows: Sequence[BillRow],
+    tag_names: Collection[str],
+) -> tuple[str, ...]:
+    """Non-fatal findings about the bills, in stable order.
+
+    A missing type, then kind tags missing from Paperless (only when bills are listed), then
+    one line per bill that also carries the deduction tag.
+    """
+    missing = (
+        ()
+        if found
+        else (
+            f"document type {settings.bill_document_type!r} not found in Paperless; "
+            "bills.csv has no rows",
+        )
+    )
+    absent = sorted(set(settings.bill_kind_tags.values()).difference(tag_names))
+    missing_tags = (
+        (
+            f"bill kind tags not found in Paperless: {', '.join(absent)}; names match "
+            "case-sensitively and bills cannot get those kinds",
+        )
+        if bill_rows and absent
+        else ()
+    )
+    overlaps = tuple(
+        f"document {document_id} is a bill and carries the deduction tag; it stays in "
+        "deductions.csv or review.csv and is excluded from the bill totals and WFH figures "
+        "in estimate.csv"
+        for document_id in bills_also_deductions(bill_rows)
+    )
+    return (*missing, *missing_tags, *overlaps)
 
 
 def unconfigured_field_notes(settings: Settings) -> tuple[str, ...]:

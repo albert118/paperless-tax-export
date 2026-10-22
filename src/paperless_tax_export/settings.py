@@ -11,13 +11,42 @@ from __future__ import annotations
 
 import datetime
 import re
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
 
 from paperless_tax_export.errors import SettingsError
 
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+BILL_KINDS = ("electricity", "internet", "phone", "gas")
+DEFAULT_BILL_KIND_TAGS: Mapping[str, str] = {kind: kind for kind in BILL_KINDS}
+
+
+@dataclass(frozen=True, slots=True)
+class WfhInputs:
+    """The owner's work-from-home figures; ``None`` means the variable is not set.
+
+    ``hours``, ``rate_per_hour`` and ``energy_amount`` are non-negative amounts; the two
+    percentages are percentages from 0 to 100 (50 means half), not fractions.
+    """
+
+    hours: Decimal | None = None
+    rate_per_hour: Decimal | None = None
+    internet_pct: Decimal | None = None
+    phone_pct: Decimal | None = None
+    energy_amount: Decimal | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("hours", "rate_per_hour", "energy_amount"):
+            value: Decimal | None = getattr(self, name)
+            if value is not None and not (value.is_finite() and value >= 0):
+                raise SettingsError(f"wfh {name} must be a non-negative decimal")
+        for name in ("internet_pct", "phone_pct"):
+            value = getattr(self, name)
+            if value is not None and not (value.is_finite() and 0 <= value <= 100):
+                raise SettingsError(f"wfh {name} must be a decimal from 0 to 100")
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +72,9 @@ class Settings:
     expected_count: int | None = None
     marginal_rate: Decimal | None = None
     rates_file: Path | None = None
+    bill_document_type: str = "bill"
+    bill_kind_tags: Mapping[str, str] = field(default_factory=lambda: dict(DEFAULT_BILL_KIND_TAGS))
+    wfh: WfhInputs = field(default_factory=WfhInputs)
     timeout_seconds: float = 30.0
 
     def __post_init__(self) -> None:
@@ -81,8 +113,28 @@ class Settings:
             raise SettingsError("marginal_rate must be a decimal between 0 and 1")
         if self.rates_file is not None and self.rates_file == Path():
             raise SettingsError("rates_file must name a file")
+        if not self.bill_document_type.strip():
+            raise SettingsError("bill_document_type must not be empty")
+        _validate_bill_kind_tags(self.bill_kind_tags)
+        reserved = {self.deduction_tag, self.asset_reviewed_tag}
+        if reserved.intersection(self.bill_kind_tags.values()):
+            raise SettingsError(
+                "bill_kind_tags must not use the same tag name as deduction_tag or "
+                "asset_reviewed_tag"
+            )
         if self.timeout_seconds <= 0:
             raise SettingsError(f"timeout_seconds must be positive, got {self.timeout_seconds}")
+
+
+def _validate_bill_kind_tags(kind_tags: Mapping[str, str]) -> None:
+    """Raise ``SettingsError`` unless every kind has exactly one non-empty, distinct tag name."""
+    if set(kind_tags) != set(BILL_KINDS):
+        raise SettingsError(f"bill_kind_tags must map exactly these kinds: {', '.join(BILL_KINDS)}")
+    names = list(kind_tags.values())
+    if any(not name.strip() for name in names):
+        raise SettingsError("bill_kind_tags tag names must not be empty")
+    if len(set(names)) != len(names):
+        raise SettingsError("bill_kind_tags must use a different tag for each kind")
 
 
 def _validate_iso_date(value: str, name: str) -> None:

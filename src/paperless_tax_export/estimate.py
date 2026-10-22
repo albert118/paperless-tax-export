@@ -17,7 +17,7 @@ import hashlib
 import io
 import re
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
@@ -89,6 +89,20 @@ class Estimate:
     pending_aud: Decimal
     tax_saving: Decimal | None
     unconverted_currencies: tuple[str, ...]
+    bills_aud: Decimal = Decimal(0)
+
+
+@dataclass(frozen=True, slots=True)
+class BillsSection:
+    """The bill and WFH rows built by :mod:`paperless_tax_export.wfh_estimate`.
+
+    ``total_aud`` is the AUD total of the bills counted; ``unconverted_currencies`` are the
+    currencies of bills left out of it for lack of a rate.
+    """
+
+    rows: tuple[EstimateRow, ...]
+    total_aud: Decimal
+    unconverted_currencies: tuple[str, ...] = ()
 
 
 def parse_positive_decimal(text: str) -> Decimal | None:
@@ -167,12 +181,16 @@ def _sha256(content: bytes) -> str:
 
 def _to_aud(row: ClassifiedRow, rates: Mapping[str, Decimal]) -> Decimal | None:
     """The row's AUD amount, rounded to cents, or ``None`` when its currency has no rate."""
-    amount = row.amount_inc_gst
-    if amount is None:
+    if row.amount_inc_gst is None:
         return None
-    if row.currency == AUD:
+    return convert_to_aud(row.amount_inc_gst, row.currency, rates)
+
+
+def convert_to_aud(amount: Decimal, currency: str, rates: Mapping[str, Decimal]) -> Decimal | None:
+    """*amount* in AUD rounded to cents, or ``None`` when *currency* has no rate."""
+    if currency == AUD:
         return amount.quantize(_CENT, rounding=ROUND_HALF_UP)
-    rate = rates.get(row.currency)
+    rate = rates.get(currency)
     if rate is None:
         return None
     return (amount * rate).quantize(_CENT, rounding=ROUND_HALF_UP)
@@ -196,10 +214,10 @@ class _Tally:
 
     @property
     def note(self) -> str:
-        return _excluded_note(self.unconverted)
+        return excluded_note(self.unconverted)
 
 
-def _excluded_note(unconverted: Mapping[str, int]) -> str:
+def excluded_note(unconverted: Mapping[str, int]) -> str:
     if not unconverted:
         return ""
     listed = ", ".join(f"{code} {unconverted[code]}" for code in sorted(unconverted))
@@ -217,14 +235,19 @@ def build_estimate(
     review: Sequence[ClassifiedRow],
     rates: Mapping[str, Decimal],
     marginal_rate: Decimal | None,
+    bills_section: Callable[[Decimal], BillsSection] | None = None,
 ) -> Estimate:
     """Compute the estimate rows in their fixed order from the run's classified rows.
+
+    *bills_section*, when given, is called with the deductions total and returns the bill and
+    WFH rows; they follow ``deductions_by_month`` and precede ``pending``. They never change
+    the deductions, pending or tax-saving figures.
 
     Raises ``EstimateError`` (exit 4, no value in the message) when an amount is so large
     that the ``Decimal`` arithmetic overflows its context.
     """
     try:
-        return _build_estimate(accepted, review, rates, marginal_rate)
+        return _build_estimate(accepted, review, rates, marginal_rate, bills_section)
     except InvalidOperation as exc:
         raise EstimateError(
             "an amount is too large for the estimate arithmetic; check the document amounts"
@@ -240,6 +263,7 @@ def _build_estimate(
     review: Sequence[ClassifiedRow],
     rates: Mapping[str, Decimal],
     marginal_rate: Decimal | None,
+    bills_section: Callable[[Decimal], BillsSection] | None,
 ) -> Estimate:
     claimable = _tally_rows(accepted, rates)
     pending = _tally_rows([row for row in review if row.amount_inc_gst is not None], rates)
@@ -292,6 +316,9 @@ def _build_estimate(
         )
     rows.extend(_group_rows("deductions_by_type", by_type))
     rows.extend(_group_rows("deductions_by_month", by_month))
+    bills = None if bills_section is None else bills_section(total.total_aud)
+    if bills is not None:
+        rows.extend(bills.rows)
     rows.append(
         EstimateRow(
             "pending",
@@ -320,7 +347,9 @@ def _build_estimate(
         )
 
     unconverted = sorted(
-        {row.currency for row, aud in (*claimable, *pending) if aud is None} - {""}
+        {row.currency for row, aud in (*claimable, *pending) if aud is None}.union(
+            () if bills is None else bills.unconverted_currencies
+        ).difference({""})
     )
     return Estimate(
         rows=tuple(rows),
@@ -328,6 +357,7 @@ def _build_estimate(
         pending_aud=pending_tally.total_aud,
         tax_saving=tax_saving,
         unconverted_currencies=tuple(unconverted),
+        bills_aud=Decimal(0) if bills is None else bills.total_aud,
     )
 
 

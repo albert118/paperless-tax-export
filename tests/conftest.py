@@ -16,12 +16,21 @@ from paperless_tax_export.client import PaperlessClient
 
 BASE_URL = "http://paperless.test"
 TOKEN = "test-token"
+WFH_VARIABLES = (
+    "WFH_HOURS",
+    "WFH_RATE_PER_HOUR",
+    "WFH_INTERNET_PCT",
+    "WFH_PHONE_PCT",
+    "WFH_ENERGY_AMOUNT",
+)
 
 
 @pytest.fixture(autouse=True)
-def _no_marginal_rate_in_the_real_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A TAX_MARGINAL_RATE exported in the developer's shell must not change test output."""
+def _no_estimate_variables_in_the_real_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TAX_MARGINAL_RATE and WFH_* exported in the developer's shell must not change test output."""
     monkeypatch.delenv("TAX_MARGINAL_RATE", raising=False)
+    for name in WFH_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
 
 
 def paperless_filter_matches(document: dict[str, object], params: httpx.QueryParams) -> bool:
@@ -37,6 +46,10 @@ def paperless_filter_matches(document: dict[str, object], params: httpx.QueryPar
         return False
     if "correspondent__id" in params and document["correspondent"] != int(
         params["correspondent__id"]
+    ):
+        return False
+    if "document_type__id" in params and document["document_type"] != int(
+        params["document_type__id"]
     ):
         return False
     tag_ids = document["tags"]

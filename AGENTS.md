@@ -16,9 +16,11 @@ Outputs, written into `output/`:
   priority output.
 - `deductions.csv`: documents that pass every check.
 - `investments.csv`: index of the investing portfolio statements (one configured correspondent).
+- `bills.csv`: utilities and bills (Paperless documents of type `bill`), kind from a tag.
 - `estimate.csv`: an estimate of total deductions in AUD (the sum of `deductions.csv`), a
   separate pending figure for `review.csv` rows, and an optional tax saving. Foreign amounts
-  are converted with the owner's rates file (`run --rates FILE`). Not tax advice.
+  are converted with the owner's rates file (`run --rates FILE`). It also shows the bills and
+  two illustrative WFH scenarios that never change those figures. Not tax advice.
 - `manifest.json`: parameters, versions, counts and file hashes.
 
 ## Current state
@@ -29,20 +31,32 @@ reports how it lines up with the export settings (`output/audit.json`). The audi
 diagnostic, not a gate: a missing tag, zero matching documents, missing fields and zero
 coverage are printed findings and the exit code stays 0. The `run` subcommand
 classifies the FY documents and writes `deductions.csv` and `review.csv`, plus
-`investments.csv` (the configured investing correspondent's FY documents), `estimate.csv`
-and `manifest.json` (no timestamp, written last). `run --expected-count N` compares N with
+`investments.csv` (the configured investing correspondent's FY documents), `bills.csv`
+(the FY documents of type `bill`), `estimate.csv` and `manifest.json` (no timestamp, written
+last), in that order. `run --expected-count N` compares N with
 the FY-scoped selected count and `run --dry-run` runs every guard and writes nothing.
 `verify [--output DIR]` re-checks a finished output directory offline: SHA-256 and data-row
 count of every file in `manifest.json`, plus the manifest's own counts (exit 0, 4 on a
 mismatch or missing listed file, 2 on an unusable manifest, which includes a manifest
 written by 0.2.x (it lists `ibkr-documents.csv` and `counts.ibkr_count`) or one that does
-not list `estimate.csv`).
+not list `bills.csv` or `estimate.csv`).
 
 The estimate's setting: `TAX_MARGINAL_RATE` (a decimal fraction from 0 to 1) is resolved like
 `PAPERLESS_TOKEN` through `EnvSources.lookup` (real env var, then dotenv; no command-line flag)
 and is optional; without it there is no `tax_saving` row. Both it and the SHA-256 of the
 `--rates` file are recorded in the manifest parameters. Amounts are `Decimal` and each row's
 AUD amount is rounded to cents (`ROUND_HALF_UP`) before summing.
+
+Bills: `Settings.bill_document_type` (default `bill`, exact name, resolved from the already
+fetched document types; a missing type is a warning and a header-only file, two types with
+the name exit 4) and `Settings.bill_kind_tags` (kind to tag name, defaults `electricity`,
+`internet`, `phone`, `gas`). A bill with the deduction tag stays in the deduction outputs,
+is listed in `bills.csv` with a note and warned about, and is excluded from the bill figures
+in `estimate.csv`. The WFH scenarios (fixed rate and actual cost, side by side, never added
+to the base total) read `WFH_HOURS`, `WFH_RATE_PER_HOUR`, `WFH_INTERNET_PCT` (0 to 100),
+`WFH_PHONE_PCT` (0 to 100) and `WFH_ENERGY_AMOUNT` through `EnvSources.lookup` like
+`TAX_MARGINAL_RATE` (no flags; an empty or invalid value exits 2). They are recorded as typed
+in the manifest parameters. The method assumptions behind them are the owner's, not verified.
 
 In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_export/`,
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,
