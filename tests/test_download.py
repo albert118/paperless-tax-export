@@ -491,6 +491,8 @@ def test_hostile_names_produce_safe_unique_entries(tmp_path: Path) -> None:
             "deductions.csv": buffer.getvalue().encode("utf-8-sig"),
             "review.csv": b"id\r\n",
             "investments.csv": b"paperless_document_id,created,correspondent\r\n",
+            "bills.csv": b"paperless_document_id\r\n",
+            "estimate.csv": b"section\r\n",
         },
         _counts(len(names), 0, 0),
     )
@@ -516,6 +518,8 @@ def test_duplicate_ids_in_one_csv_fail_before_any_request(tmp_path: Path) -> Non
             ),
             "review.csv": b"id\r\n",
             "investments.csv": b"paperless_document_id,created,correspondent\r\n",
+            "bills.csv": b"paperless_document_id\r\n",
+            "estimate.csv": b"section\r\n",
         },
         _counts(2, 0, 0),
     )
@@ -941,6 +945,8 @@ def _craft_deductions(tmp_path: Path, name: str, rows: list[list[object]]) -> Pa
             "deductions.csv": buffer.getvalue().encode("utf-8-sig"),
             "review.csv": b"id\r\n",
             "investments.csv": b"paperless_document_id,created,correspondent\r\n",
+            "bills.csv": b"paperless_document_id\r\n",
+            "estimate.csv": b"section\r\n",
         },
         _counts(len(rows), 0, 0),
     )
