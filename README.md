@@ -368,6 +368,9 @@ PAPERLESS_TOKEN=replace-with-the-view-only-api-token
 PAPERLESS_BASE_URL=https://paperless.example.com
 ```
 
+[`.env.example`](.env.example) lists every variable the tool reads from a dotenv file,
+commented out, with a note on each.
+
 Keep this file outside the repository and make it readable only by you
 (`chmod 600 /path/to/paperless.env`). In the container, docker compose injects it with
 `env_file:`, so the tool sees ordinary environment variables. On another machine, pass
