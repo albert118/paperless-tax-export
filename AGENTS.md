@@ -78,7 +78,9 @@ a payslip, and a payslip title must never appear in stdout, stderr, any CSV or t
 `download [--output DIR] [--env-file PATH] [--base-url URL] [--token-file PATH] [--require-checksum] [--dry-run]` gates on the same check, then fetches the original file of each
 `deductions.csv` and `investments.csv` document (GET only, streamed, checked against Paperless's
 `checksum` where usable) and writes `tax-pack.zip` all or nothing through a temp file and
-`os.replace`; the live facts it assumes are unverified (see the README).
+`os.replace`, together with byte-for-byte copies of `deductions.csv`, `investments.csv`,
+`bills.csv` and `estimate.csv` (each hash-checked against the manifest; `review.csv` is not
+packed); the live facts it assumes are unverified (see the README).
 
 In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_export/`,
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,

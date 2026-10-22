@@ -200,15 +200,18 @@ def test_happy_path_writes_exactly_the_designed_zip(
             assert info.comment == b""
         assert archive.comment == b""
     assert names == [
+        "bills.csv",
         "deductions.csv",
         "deductions/1_2025-10-01_Alpha_Supplies.pdf",
         "downloads.json",
+        "estimate.csv",
         "investments.csv",
         "investments/4_2025-10-01_Interactive_Brokers.pdf",
     ]
     contents = _read_zip(pack)
-    assert contents["deductions.csv"] == (output / "deductions.csv").read_bytes()
-    assert contents["investments.csv"] == (output / "investments.csv").read_bytes()
+    for csv_name in ("bills.csv", "deductions.csv", "estimate.csv", "investments.csv"):
+        assert contents[csv_name] == (output / csv_name).read_bytes()
+    assert "review.csv" not in contents
     assert contents["deductions/1_2025-10-01_Alpha_Supplies.pdf"] == RECEIPT_1
     assert contents["investments/4_2025-10-01_Interactive_Brokers.pdf"] == RECEIPT_4
 
@@ -294,6 +297,28 @@ def test_csv_changed_after_the_gate_is_refused(
 
     monkeypatch.setattr("paperless_tax_export.download.verify_directory", verify_then_swap)
     with pytest.raises(VerificationError, match="changed after the verify check"):
+        prepare_download(output)
+
+
+@pytest.mark.parametrize("name", ["bills.csv", "estimate.csv"])
+def test_copied_csv_changed_after_the_gate_is_refused(
+    output: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    original = output / name
+    real_verify = verify_directory
+    real_read = Path.read_bytes
+
+    def swapped(path: Path) -> bytes:
+        content = real_read(path)
+        return content + b"tampered\r\n" if path == original else content
+
+    def verify_then_swap(directory: Path) -> VerifyReport:
+        report = real_verify(directory)
+        monkeypatch.setattr(Path, "read_bytes", swapped)
+        return report
+
+    monkeypatch.setattr("paperless_tax_export.download.verify_directory", verify_then_swap)
+    with pytest.raises(VerificationError, match=f"{name} changed after the verify check"):
         prepare_download(output)
 
 
@@ -975,8 +1000,10 @@ def test_an_empty_pack_warns_on_stderr_and_still_succeeds(
     assert "list no documents" in capsys.readouterr().err
     assert fake.requests == []
     assert sorted(_read_zip(directory / "tax-pack.zip")) == [
+        "bills.csv",
         "deductions.csv",
         "downloads.json",
+        "estimate.csv",
         "investments.csv",
     ]
 
