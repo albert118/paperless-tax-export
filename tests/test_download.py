@@ -26,6 +26,7 @@ from test_verify import _counts, _craft_directory
 
 from paperless_tax_export.cli import main
 from paperless_tax_export.client import (
+    DOWNLOAD_CONNECT_TIMEOUT_SECONDS,
     DOWNLOAD_TIMEOUT_SECONDS,
     parse_content_disposition_filename,
 )
@@ -42,9 +43,11 @@ from paperless_tax_export.errors import (
     HttpStatusError,
     TaxExportAuthError,
     TransportError,
+    VerificationError,
 )
 from paperless_tax_export.export import run_export
 from paperless_tax_export.settings import Settings
+from paperless_tax_export.verify import VerifyReport, verify_directory
 
 SECRET = "tok-9f3a7c1d-DISTINCTIVE"
 PDF = {
@@ -251,13 +254,47 @@ def test_a_successful_run_replaces_an_existing_zip(
 
 
 def test_tampered_csv_exits_4_with_no_request_and_no_zip(
-    output: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    output: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    (output / "deductions.csv").write_bytes((output / "deductions.csv").read_bytes() + b"x")
+    _edit_valid_row(output / "deductions.csv", b"Alpha Supplies", b"Alpha Supplier")
     fake = FakePaperless(default_served())
     assert _download(output, tmp_path, monkeypatch, fake) == 4
+    assert "verification problem" in capsys.readouterr().err
     assert fake.requests == []
     assert not (output / "tax-pack.zip").exists()
+
+
+def _edit_valid_row(path: Path, old: bytes, new: bytes) -> None:
+    """Change a cell so the CSV still parses and keeps its ids; only the hash differs."""
+    content = path.read_bytes()
+    assert old in content
+    path.write_bytes(content.replace(old, new, 1))
+
+
+def test_csv_changed_after_the_gate_is_refused(
+    output: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = output / "deductions.csv"
+    real_verify = verify_directory
+    real_read = Path.read_bytes
+
+    def swapped(path: Path) -> bytes:
+        content = real_read(path)
+        if path == original:
+            return content.replace(b"Alpha Supplies", b"Alpha Supplier")
+        return content
+
+    def verify_then_swap(directory: Path) -> VerifyReport:
+        report = real_verify(directory)
+        monkeypatch.setattr(Path, "read_bytes", swapped)
+        return report
+
+    monkeypatch.setattr("paperless_tax_export.download.verify_directory", verify_then_swap)
+    with pytest.raises(VerificationError, match="changed after the verify check"):
+        prepare_download(output)
 
 
 def test_unusable_manifest_exits_2_with_no_request(
@@ -465,7 +502,7 @@ def test_hostile_names_produce_safe_unique_entries(tmp_path: Path) -> None:
     for arcname in arcnames:
         assert SAFE_ARCNAME.match(arcname), arcname
         assert ".." not in arcname
-        assert len(arcname.split("/")[1]) < 100
+        assert len(arcname.split("/")[1]) <= len("12_2025-10-01_") + 60 + len(".pdf")
     assert _names(directory).count("tax-pack.zip") == 1
 
 
@@ -582,10 +619,11 @@ def test_dry_run_makes_no_request_and_creates_nothing(
 
 
 def test_dry_run_still_runs_the_verify_gate(
-    output: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    output: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    (output / "investments.csv").write_bytes(b"x")
+    _edit_valid_row(output / "investments.csv", b"Interactive Brokers", b"Interactive Brokerz")
     assert main(["download", "--output", str(output), "--dry-run"]) == 4
+    assert "verification problem" in capsys.readouterr().err
 
 
 # --- secrets -----------------------------------------------------------------
@@ -651,7 +689,8 @@ def test_a_large_body_is_streamed_in_chunks_and_never_read_whole(
     assert result.sha256 == sha256(body)
     assert result.md5 == md5(body)
     assert result.content_length == len(body)
-    assert seen[0].extensions["timeout"]["read"] == DOWNLOAD_TIMEOUT_SECONDS
+    assert seen[0].extensions["timeout"]["read"] == DOWNLOAD_TIMEOUT_SECONDS == 300.0
+    assert seen[0].extensions["timeout"]["connect"] == DOWNLOAD_CONNECT_TIMEOUT_SECONDS == 30.0
     assert DOWNLOAD_TIMEOUT_SECONDS > 30.0
     assert seen[0].headers["Accept-Encoding"] == "identity"
 
@@ -778,3 +817,158 @@ def _overlap_directory(tmp_path: Path) -> Path:
     directory = tmp_path / "overlap"
     run_export(Settings(), make_client(make_handler(documents)), output=directory)
     return directory
+
+
+# --- unchecked downloads -----------------------------------------------------
+
+
+def test_the_checksum_line_counts_matches_and_unchecked(
+    output: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert _download(output, tmp_path, monkeypatch, FakePaperless(default_served())) == 0
+    captured = capsys.readouterr()
+    assert "checksum: 2 match, 0 unchecked" in captured.out.splitlines()
+    assert "not checked" not in captured.err
+
+
+def test_unchecked_documents_are_counted_and_warned_about_by_id(
+    output: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    served = default_served()
+    served[1].checksum = None
+    assert _download(output, tmp_path, monkeypatch, FakePaperless(served)) == 0
+    captured = capsys.readouterr()
+    assert "checksum: 1 match, 1 unchecked" in captured.out.splitlines()
+    assert "warning: 1 document(s) were not checked against a Paperless checksum" in captured.err
+    assert captured.err.strip().endswith(": 1")
+    assert (output / "tax-pack.zip").exists()
+
+
+def test_require_checksum_fails_on_an_unchecked_document_and_writes_no_zip(
+    output: Path,
+    tmp_path: Path,
+    scratch: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    served = default_served()
+    served[4].checksum = ""
+    (output / "tax-pack.zip").write_bytes(b"previous pack")
+    before = _names(output)
+    code = _download(output, tmp_path, monkeypatch, FakePaperless(served), "--require-checksum")
+    assert code == 4
+    err = capsys.readouterr().err
+    assert "document 4: no usable Paperless checksum" in err
+    assert "Interactive" not in err
+    assert (output / "tax-pack.zip").read_bytes() == b"previous pack"
+    assert _names(output) == before
+    assert list(scratch.iterdir()) == []
+
+
+def test_require_checksum_succeeds_when_every_checksum_matches(
+    output: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    code = _download(
+        output, tmp_path, monkeypatch, FakePaperless(default_served()), "--require-checksum"
+    )
+    assert code == 0
+    assert zipfile.is_zipfile(output / "tax-pack.zip")
+
+
+# --- interruption and cleanup ------------------------------------------------
+
+
+@pytest.mark.parametrize("failure", [KeyboardInterrupt, RuntimeError])
+def test_write_atomically_cleans_up_after_any_exception(
+    failure: type[BaseException], tmp_path: Path
+) -> None:
+    target = tmp_path / "pack.zip"
+    target.write_bytes(b"old")
+
+    def broken(path: Path) -> None:
+        path.write_bytes(b"half")
+        raise failure("stop")
+
+    with pytest.raises(failure):
+        write_atomically(target, broken)
+    assert target.read_bytes() == b"old"
+    assert _names(tmp_path) == ["pack.zip"]
+
+
+@pytest.mark.parametrize("failure", [KeyboardInterrupt, RuntimeError])
+def test_a_zip_that_fails_part_way_leaves_nothing_behind(
+    failure: type[BaseException],
+    output: Path,
+    tmp_path: Path,
+    scratch: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def broken(path: Path, *, members: object) -> None:
+        path.write_bytes(b"PK partial")
+        raise failure("stop")
+
+    monkeypatch.setattr("paperless_tax_export.download._write_zip", broken)
+    (output / "tax-pack.zip").write_bytes(b"previous pack")
+    before = _names(output)
+    _install(monkeypatch, FakePaperless(default_served()))
+    argv = ["download", "--output", str(output), "--token-file", str(_token(tmp_path))]
+    with pytest.raises(failure):
+        main(argv)
+    assert (output / "tax-pack.zip").read_bytes() == b"previous pack"
+    assert _names(output) == before
+    assert list(scratch.iterdir()) == []
+
+
+# --- limits and warnings -----------------------------------------------------
+
+
+def _craft_deductions(tmp_path: Path, name: str, rows: list[list[object]]) -> Path:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\r\n")
+    writer.writerow(["paperless_document_id", "date", "supplier_name"])
+    writer.writerows(rows)
+    directory = tmp_path / name
+    _craft_directory(
+        directory,
+        {
+            "deductions.csv": buffer.getvalue().encode("utf-8-sig"),
+            "review.csv": b"id\r\n",
+            "investments.csv": b"paperless_document_id,created,correspondent\r\n",
+        },
+        _counts(len(rows), 0, 0),
+    )
+    return directory
+
+
+def test_the_date_fragment_is_stripped_and_capped(tmp_path: Path) -> None:
+    directory = _craft_deductions(tmp_path, "dates", [[1, "../../x", "A"], [2, "9" * 100, "A"]])
+    stems = [document.stem for document in prepare_download(directory).documents]
+    assert stems == ["deductions/1_x_A", "deductions/2_" + "9" * 20 + "_A"]
+
+
+@pytest.mark.parametrize("raw_id", ["9" * 19, "9" * 5000, "-1", "1.5", "0x10"])
+def test_an_oversized_or_malformed_id_is_a_download_error(tmp_path: Path, raw_id: str) -> None:
+    directory = _craft_deductions(tmp_path, "ids", [[raw_id, "2025-10-01", "A"]])
+    with pytest.raises(DownloadError, match="not a document id"):
+        prepare_download(directory)
+
+
+def test_an_empty_pack_warns_on_stderr_and_still_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    directory = _craft_deductions(tmp_path, "empty-pack", [])
+    fake = FakePaperless({})
+    assert _download(directory, tmp_path, monkeypatch, fake) == 0
+    assert "list no documents" in capsys.readouterr().err
+    assert fake.requests == []
+    assert sorted(_read_zip(directory / "tax-pack.zip")) == [
+        "deductions.csv",
+        "downloads.json",
+        "investments.csv",
+    ]

@@ -54,6 +54,7 @@ _DOCUMENT_FIELDS = (
 # Originals can be large scans; the JSON calls' 30 second timeout is too short for them.
 # httpx applies this per read, not to the whole transfer.
 DOWNLOAD_TIMEOUT_SECONDS = 300.0
+DOWNLOAD_CONNECT_TIMEOUT_SECONDS = 30.0
 _DOWNLOAD_CHUNK_BYTES = 64 * 1024
 _DOCUMENT_FILE_FIELDS = "id,checksum,original_file_name"
 
@@ -272,7 +273,9 @@ class PaperlessClient:
                 f"/api/documents/{document_id}/download/",
                 params={"original": "true"},
                 headers={"Accept": "*/*", "Accept-Encoding": "identity"},
-                timeout=DOWNLOAD_TIMEOUT_SECONDS,
+                timeout=httpx.Timeout(
+                    DOWNLOAD_TIMEOUT_SECONDS, connect=DOWNLOAD_CONNECT_TIMEOUT_SECONDS
+                ),
             ) as response:
                 self._raise_for_document_status(response, document_id)
                 with dest_path.open("wb") as handle:

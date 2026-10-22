@@ -33,8 +33,8 @@ from paperless_tax_export.client import (
     PaperlessClient,
 )
 from paperless_tax_export.errors import DownloadError, VerificationError
-from paperless_tax_export.manifest import DEDUCTIONS_FILE, INVESTMENTS_FILE
-from paperless_tax_export.verify import verify_directory
+from paperless_tax_export.manifest import DEDUCTIONS_FILE, INVESTMENTS_FILE, MANIFEST_FILE
+from paperless_tax_export.verify import parse_manifest, verify_directory
 
 PACK_NAME = "tax-pack.zip"
 DOWNLOADS_FILE = "downloads.json"
@@ -45,6 +45,8 @@ CHECKSUM_MATCH = "match"
 CHECKSUM_UNCHECKED = "unchecked"
 
 _MAX_NAME_CHARS = 60
+_MAX_DATE_CHARS = 20
+_MAX_ID_DIGITS = 18
 _MAX_EXTENSION_CHARS = 10
 _UNKNOWN = "unknown"
 _FALLBACK_EXTENSION = ".bin"
@@ -58,7 +60,7 @@ _UNDERSCORE_RUN_RE = re.compile(r"_{2,}")
 _DOT_RUN_RE = re.compile(r"\.{2,}")
 _MD5_RE = re.compile(r"^[0-9a-f]{32}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-_DIGITS_RE = re.compile(r"^[0-9]+$")
+_ID_RE = re.compile(rf"^[0-9]{{1,{_MAX_ID_DIGITS}}}$")
 
 _CONTENT_TYPE_EXTENSIONS = {
     "application/pdf": ".pdf",
@@ -87,7 +89,7 @@ class PlannedDocument:
     @property
     def stem(self) -> str:
         """The archive path without its extension, e.g. ``deductions/12_2025-10-01_Acme``."""
-        date = sanitise_name(self.date)
+        date = sanitise_name(self.date, limit=_MAX_DATE_CHARS)
         name = sanitise_name(self.name, limit=_MAX_NAME_CHARS)
         return f"{self.set_name}/{self.document_id}_{date}_{name}"
 
@@ -127,6 +129,18 @@ class DownloadResult:
     entries: tuple[PackEntry, ...]
     warnings: tuple[str, ...]
     zip_sha256: str
+
+    @property
+    def unchecked_ids(self) -> tuple[int, ...]:
+        """Ids whose download had no usable stored checksum to compare with."""
+        return tuple(
+            sorted({e.document_id for e in self.entries if e.checksum_result == CHECKSUM_UNCHECKED})
+        )
+
+    @property
+    def matched_count(self) -> int:
+        """Distinct documents whose bytes matched the stored checksum."""
+        return len({e.document_id for e in self.entries if e.checksum_result == CHECKSUM_MATCH})
 
     def count_for(self, set_name: str) -> int:
         return sum(1 for entry in self.entries if entry.set_name == set_name)
@@ -188,10 +202,13 @@ def prepare_download(directory: Path) -> DownloadPlan:
         raise VerificationError(
             f"{report.problems} verification problem(s) in {directory}; run verify for details"
         )
+    expected = _manifest_hashes(directory)
     contents: dict[str, bytes] = {}
     documents: list[PlannedDocument] = []
     for set_name, file_name, id_column, date_column, name_column in _SOURCES:
         contents[file_name] = _read_csv_file(directory / file_name)
+        if hashlib.sha256(contents[file_name]).hexdigest() != expected[file_name]:
+            raise VerificationError(f"{file_name} changed after the verify check")
         documents.extend(
             _read_rows(
                 contents[file_name], file_name, set_name, (id_column, date_column, name_column)
@@ -201,10 +218,19 @@ def prepare_download(directory: Path) -> DownloadPlan:
     return DownloadPlan(
         directory=directory,
         documents=tuple(documents),
-        warnings=_overlap_warnings(documents),
+        warnings=_plan_warnings(documents),
         deductions_csv=contents[DEDUCTIONS_FILE],
         investments_csv=contents[INVESTMENTS_FILE],
     )
+
+
+def _manifest_hashes(directory: Path) -> dict[str, str]:
+    """The manifest's SHA-256 for each CSV that goes into the pack."""
+    try:
+        manifest = parse_manifest((directory / MANIFEST_FILE).read_bytes())
+    except OSError as exc:
+        raise DownloadError(f"cannot read {MANIFEST_FILE}: {exc.strerror or 'I/O error'}") from exc
+    return {name: manifest.outputs[name].sha256 for name in (DEDUCTIONS_FILE, INVESTMENTS_FILE)}
 
 
 def _read_csv_file(path: Path) -> bytes:
@@ -231,7 +257,7 @@ def _read_rows(
     seen: set[int] = set()
     for number, row in enumerate(rows, start=2):
         raw_id = (row.get(id_column) or "").strip()
-        if _DIGITS_RE.match(raw_id) is None:
+        if _ID_RE.match(raw_id) is None:
             raise DownloadError(f"{file_name} line {number}: '{id_column}' is not a document id")
         document_id = int(raw_id)
         if document_id in seen:
@@ -246,6 +272,16 @@ def _read_rows(
             )
         )
     return documents
+
+
+def _plan_warnings(documents: list[PlannedDocument]) -> tuple[str, ...]:
+    warnings = list(_overlap_warnings(documents))
+    if not documents:
+        warnings.append(
+            f"{DEDUCTIONS_FILE} and {INVESTMENTS_FILE} list no documents;"
+            f" the pack will hold only the CSVs and {DOWNLOADS_FILE}"
+        )
+    return tuple(warnings)
 
 
 def _overlap_warnings(documents: list[PlannedDocument]) -> tuple[str, ...]:
@@ -299,12 +335,17 @@ class _Fetched:
     checksum_result: str
 
 
-def execute_download(plan: DownloadPlan, client: PaperlessClient) -> DownloadResult:
-    """Download every planned original and write ``tax-pack.zip`` all or nothing."""
+def execute_download(
+    plan: DownloadPlan, client: PaperlessClient, *, require_checksum: bool = False
+) -> DownloadResult:
+    """Download every planned original and write ``tax-pack.zip`` all or nothing.
+
+    With *require_checksum*, a document with no usable stored checksum fails the run.
+    """
     warnings: list[str] = []
     try:
         with tempfile.TemporaryDirectory(prefix="paperless-tax-export-") as scratch:
-            fetched = _fetch_all(plan, client, Path(scratch), warnings)
+            fetched = _fetch_all(plan, client, Path(scratch), warnings, require_checksum)
             entries = _build_entries(plan, fetched)
             pack_path, zip_sha256 = _write_pack(plan, entries)
     except OSError as exc:
@@ -318,7 +359,11 @@ def execute_download(plan: DownloadPlan, client: PaperlessClient) -> DownloadRes
 
 
 def _fetch_all(
-    plan: DownloadPlan, client: PaperlessClient, scratch: Path, warnings: list[str]
+    plan: DownloadPlan,
+    client: PaperlessClient,
+    scratch: Path,
+    warnings: list[str],
+    require_checksum: bool,
 ) -> dict[int, _Fetched]:
     fetched: dict[int, _Fetched] = {}
     for document_id in plan.unique_ids:
@@ -326,6 +371,11 @@ def _fetch_all(
         destination = scratch / f"{document_id}.download"
         downloaded = client.download_original(document_id, destination)
         result = check_integrity(info, downloaded)
+        if require_checksum and result == CHECKSUM_UNCHECKED:
+            raise DownloadError(
+                f"document {document_id}: no usable Paperless checksum to compare with"
+                " (--require-checksum)"
+            )
         extension = derive_extension(
             downloaded.file_name, info.original_file_name, downloaded.content_type
         )

@@ -301,6 +301,14 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     download_parser.add_argument(
+        "--require-checksum",
+        action="store_true",
+        help=(
+            "fail (exit 4, no zip) when a document has no usable Paperless checksum to"
+            " compare with; by default such documents are packed and reported as unchecked"
+        ),
+    )
+    download_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="after the verify gate, print the planned entries and counts; no request, no file",
@@ -482,11 +490,19 @@ def _run_download_command(args: argparse.Namespace) -> int:
         page_size=settings.page_size,
         timeout=settings.timeout_seconds,
     ) as client:
-        result = execute_download(plan, client)
+        result = execute_download(plan, client, require_checksum=args.require_checksum)
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
+    if result.unchecked_ids:
+        ids = ", ".join(str(document_id) for document_id in result.unchecked_ids)
+        print(
+            f"warning: {len(result.unchecked_ids)} document(s) were not checked against a"
+            f" Paperless checksum (only size checks applied): {ids}",
+            file=sys.stderr,
+        )
     for set_name in (DEDUCTIONS_SET, INVESTMENTS_SET):
         print(f"{set_name}: {result.count_for(set_name)} receipts")
+    print(f"checksum: {result.matched_count} match, {len(result.unchecked_ids)} unchecked")
     print(f"{PACK_NAME} written to {result.pack_path} ({len(result.entries)} receipts)")
     print(f"sha256 {result.zip_sha256}")
     return EXIT_OK

@@ -267,6 +267,7 @@ It will not run after you edit `deductions.csv` by hand.
 - Token and base URL resolve like `audit` and `run`: `--token-file`, `PAPERLESS_TOKEN`, the
   dotenv file from `--env-file`, then `secrets/paperless-token.txt`; `--base-url` or
   `PAPERLESS_BASE_URL`.
+- `--require-checksum` fails the run when any document has no usable stored checksum.
 - `--dry-run` runs the verify check, prints the planned entries and counts, and stops. It makes
   no request, needs no token and creates no file.
 
@@ -292,6 +293,28 @@ Each download is compared with Paperless's stored `checksum`: a 32-hex value as 
 value as SHA-256. A difference fails the document. An empty download always fails. When the stored
 checksum is missing or has another length, only the size checks apply (non-empty, and equal to
 `Content-Length` when sent) and `downloads.json` records `"checksum_result": "unchecked"`.
+
+Unchecked downloads are reported, not hidden. The command prints `checksum: N match, M unchecked`
+and, when M is above zero, a warning on stderr listing the document ids. `--require-checksum`
+turns an unchecked document into a failure: exit 4, no zip, and a message that names the id only.
+Without the flag the run stays tolerant. With it, a stored checksum that matches still succeeds.
+
+Practical limits:
+
+- Scratch space. Each original is staged in the system temporary directory and then copied into
+  the zip, so a run needs about twice the total size of the originals free: once in the temp
+  directory, once in `--output`. In a container, `/tmp` can be small or RAM-backed; size it or
+  point `TMPDIR` at a volume with room.
+- Interrupts. Ctrl-C and ordinary errors remove the temporary files. A hard kill, including
+  SIGTERM from `docker stop`, can leave `.tax-pack-*.tmp` in `--output` and a
+  `paperless-tax-export-*` directory in the temp directory. Both hold real receipts; delete them.
+- File mode. The zip is written through a temporary file created with mode 0600 on POSIX. On a
+  container bind mount it can be unreadable from the host user until you change its mode or owner.
+- The CSV bytes packed are checked against the manifest hash after they are read, so a file
+  changed between the verify check and the read is refused (exit 4).
+- Ids are limited to 18 digits, the date part of a name to 20 characters and the name part to 60.
+- If both CSVs list no documents, the pack holds only the CSVs and `downloads.json`; the command
+  exits 0 with a warning on stderr.
 
 Exit codes: 0 on success; 2 for an unusable manifest or settings; 3 for an HTTP or network
 failure (including a 401 or 403 on a document); 4 when the verify check fails or a download fails
