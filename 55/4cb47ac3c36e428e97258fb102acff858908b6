@@ -1,0 +1,35 @@
+src/paperless_tax_export/cli.py
+  s_7826c09076e861::t_4828a213dbee7d 301-308,474,477-483,486
+src/paperless_tax_export/client.py
+  s_7826c09076e861::t_35dfedb765f8ce 57,271-273
+tests/test_download.py
+  s_74ba5ea90c2559::t_b6de7d58fb9672 29,46,50,257-260,262,265,270-299,505,622,624,626,692-693,820-974
+README.md
+  s_74ba5ea90c2559::t_5624b22b1dc7c8 259,286-307
+src/paperless_tax_export/download.py
+  s_74ba5ea90c2559::t_f77961d25a3fdb 36-37,48-49,63,92,133-144,205,210-211,221,227-235,260,277-286,338-344,348,362-366,374-378
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "554cb47ac3c36e428e97258fb102acff858908b6",
+  "prompts": {},
+  "sessions": {
+    "s_74ba5ea90c2559": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a69b1012ca2ed7a95",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    },
+    "s_7826c09076e861": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a77e8da2461a3db20",
+        "model": "unknown"
+      },
+      "human_author": "Albert Ferguson <albertferguson118@gmail.com>"
+    }
+  }
+}
