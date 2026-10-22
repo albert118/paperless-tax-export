@@ -19,7 +19,8 @@ To run it in Docker next to Paperless-ngx, see [examples/README.md](examples/REA
 | `review.csv` | Documents that need a human decision, with reason codes. The priority output. |
 | `deductions.csv` | Documents that pass every check. |
 | `investments.csv` | Index of the investing portfolio statements for the year: the documents of the one configured correspondent (`--ibkr-correspondent`, default `Interactive Brokers`). Header only, plus a warning, when the correspondent is missing. A document that also carries the deduction tag appears here and in the deduction outputs, with a warning. |
-| `estimate.csv` | An estimate of total deductions in AUD, with a separate pending figure and an optional tax saving. An estimate, not tax advice. See [The estimate](#the-estimate). |
+| `bills.csv` | The utilities and bills of the year: every Paperless document of the configured document type (default `bill`), with its kind (electricity, internet, phone, gas) from a tag. Header only, plus a warning, when the type is missing. See [Bills and the WFH scenarios](#bills-and-the-wfh-scenarios). |
+| `estimate.csv` | An estimate of total deductions in AUD, with a separate pending figure, an optional tax saving and, from the bills, illustrative work-from-home scenarios. An estimate, not tax advice. See [The estimate](#the-estimate). |
 | `manifest.json` | Run parameters, tool and Paperless versions, counts, expected count, and SHA-256 and row count of each other output. No timestamp. |
 
 All files go into `output/`, which is never committed.
@@ -221,7 +222,8 @@ defaults to the directory `run` writes into.
   line break is one row) and compares both with the manifest.
 - It also checks the manifest against the files: `counts.accepted` equals the rows of
   `deductions.csv`, `counts.review` the rows of `review.csv`, `counts.investments_count` the rows
-  of `investments.csv`, and `accepted + review` equals `selected_in_fy`.
+  of `investments.csv`, `counts.bills_count` the rows of `bills.csv`, and `accepted + review`
+  equals `selected_in_fy`.
 - It prints one `OK` or `MISMATCH` line per file, one line per failed check and a summary.
   Files in the directory that the manifest does not list (`audit.json`, `manifest.json`)
   produce one `note:` line, never a failure. It never prints file contents. A listed file
@@ -297,7 +299,7 @@ uv run paperless-tax-export audit --env-file /path/to/paperless.env
 
 `run` also writes `estimate.csv`: an estimate of total deductions, built only from the
 document amounts of that run. It is an estimate, not tax advice, and it ignores the rest
-of your return. `manifest.json` records it as a fourth output, so `verify` checks it.
+of your return. `manifest.json` records it, so `verify` checks it.
 
 `estimate.csv` has these columns, in order: `section`, `label`, `count`, `currency`,
 `amount`, `rate_to_aud`, `amount_aud`, `notes`. It follows the same byte contract as the
@@ -312,6 +314,7 @@ order:
 | `deductions_currency` | currency code | One row per currency in `deductions.csv`, sorted by code: `count`, the native total in `amount`, the rate used in `rate_to_aud` (blank for AUD or when there is none) and the converted total in `amount_aud` (blank when there is no rate; `notes` says `no rate; excluded from the AUD total`). |
 | `deductions_by_type` | document type, `(none)` when blank | `count` and the AUD total of converted amounts, sorted by type name. |
 | `deductions_by_month` | `YYYY-MM` of the row date | `count` and the AUD total of converted amounts, sorted ascending. |
+| `bills`, `wfh_evidence`, `wfh_fixed_rate`, `wfh_actual_cost`, `wfh_scenarios`, `wfh_note` | see below | Bill totals and the illustrative WFH scenarios, between `deductions_by_month` and `pending`. They never change the deductions, pending or tax saving figures. See [Bills and the WFH scenarios](#bills-and-the-wfh-scenarios). |
 | `pending` | `review rows with an amount` | The `review.csv` rows that have an amount: `count` and their AUD total, negatives included. These are not claimable yet. It is an upper bound: it includes suspected duplicates and items that may never be deductions (the `notes` cell says so). |
 | `pending_no_amount` | `review rows without an amount` | `count` of the `review.csv` rows with no amount. |
 | `tax_saving` | `estimated saving at marginal rate <rate>` | Only when `TAX_MARGINAL_RATE` is set: the deductions AUD total times the rate, in `amount_aud`. |
@@ -390,6 +393,122 @@ same line and writes nothing.
 `verify` requires `estimate.csv` in the manifest and checks its SHA-256 and data-row count
 like the other files. A manifest that does not list it exits 2 and names `estimate.csv`;
 re-run `run`.
+
+## Bills and the WFH scenarios
+
+`run` also writes `bills.csv` and adds work-from-home (WFH) scenarios to `estimate.csv`.
+The scenarios are illustrative. They rest on your own assumptions about how the two WFH
+methods work (below), which this tool does not check: confirm the method and every figure
+with your accountant. Nothing here is tax advice.
+
+### `bills.csv`
+
+Bills are the Paperless documents of one document type, named `bill` by default
+(`Settings.bill_document_type`; matched by exact name; a name used by two types exits 4). The
+selection is the same financial-year window as the other outputs, on `created`. A missing
+type is a warning (`document type 'bill' not found in Paperless; bills.csv has no rows`) and a
+header-only file, not an error. As with the other filters, a returned document of another
+type or created outside the FY exits 4 and writes nothing.
+
+`bills.csv` has these columns, in order: `paperless_document_id`, `date`, `correspondent`,
+`title`, `kind`, `amount_inc_gst`, `currency`, `notes_for_agent`. It follows the byte
+contract of the other CSVs. Every selected bill is listed, sorted by `(date, id)`: it is a
+data-gathering file with no review split.
+
+- `date` is the `Transaction Date` field when it parses, else `created` (note `date from
+  created`), the same rule as `deductions.csv`.
+- `amount_inc_gst` and `currency` use the deduction rules (a prefix on the stored value,
+  else the amount field's default currency, else `AUD`). A missing or unparseable amount
+  leaves both blank with the note `amount missing`. A negative or zero amount is listed with
+  `negative amount` or `zero amount`.
+- `kind` comes from a tag, one tag per kind. The defaults are the tags `electricity`,
+  `internet`, `phone` and `gas` (`Settings.bill_kind_tags` maps each kind to its tag name;
+  each kind needs its own tag). A bill with none of them has a blank kind and the note
+  `no kind tag`. A bill with several has a blank kind and the note
+  `several kind tags: a; b` (the tag names, sorted). Other tags are ignored.
+
+Notes are joined with `; ` in this order: amount, date, kind, deduction overlap.
+
+### The overlap rule
+
+A bill that also carries the deduction tag (`tax deductible`) stays in `deductions.csv` or
+`review.csv` like any other document. In `bills.csv` it is still listed, with the note
+`also in deductions.csv; excluded from WFH totals`, and `run` warns on stderr with its id. It
+is left out of every bill figure in `estimate.csv` (totals, kinds, evidence counts) so
+nothing counts twice. The note names `deductions.csv`, but the document may be in
+`review.csv` if it has a review code. Negative and zero bills are listed but not counted in
+those figures; a bill with no amount is counted but adds nothing to a total.
+
+### The WFH variables
+
+Five optional variables supply the scenario inputs. They are read like `TAX_MARGINAL_RATE`:
+a real environment variable wins over an entry in the dotenv file named by `--env-file`;
+there are no command-line flags. An empty or invalid value exits 2 with a message that names
+the variable and where it came from, never the value. Each value is recorded as typed in
+`manifest.json` under `parameters` (`wfh_hours`, `wfh_rate_per_hour`, `wfh_internet_pct`,
+`wfh_phone_pct`, `wfh_energy_amount`; `null` when unset), so `verify` covers them.
+
+| Variable | Meaning | Valid values |
+| --- | --- | --- |
+| `WFH_HOURS` | Hours worked from home in the year, for the fixed-rate scenario. | Non-negative decimal |
+| `WFH_RATE_PER_HOUR` | The fixed rate in AUD per hour. There is no default: you supply it. | Non-negative decimal |
+| `WFH_INTERNET_PCT` | Work-use share of the internet bills, as a percentage (`50` is half, not `0.5`). | Decimal from 0 to 100 |
+| `WFH_PHONE_PCT` | Work-use share of the phone bills, as a percentage. | Decimal from 0 to 100 |
+| `WFH_ENERGY_AMOUNT` | Your own appliance-based energy figure in AUD. The tool does not compute energy from bills. | Non-negative decimal |
+
+```dotenv
+WFH_HOURS=100
+WFH_RATE_PER_HOUR=0.70
+WFH_INTERNET_PCT=50
+WFH_PHONE_PCT=25
+WFH_ENERGY_AMOUNT=30.00
+```
+
+### The scenario rows
+
+The rows follow `deductions_by_month` in `estimate.csv`, in this fixed order. Amounts are
+`amount_aud`, converted with the rates file like the deductions and rounded to cents with
+round-half-up.
+
+| `section` | `label` | What it holds |
+| --- | --- | --- |
+| `bills` | `total` | `count` and AUD total of the bills counted (see the overlap rule). `notes` lists currencies left out for lack of a rate. |
+| `bills` | `electricity`, `internet`, `phone`, `gas`, `(no kind)` | `count` and AUD total per kind, always all five. |
+| `wfh_evidence` | `internet`, `phone`, `energy` | The number of counted bills for each covered expense (`energy` is electricity plus gas); `notes` says `no bill found` when it is zero. |
+| `wfh_evidence` | `stationery` | A note only: the tool does not track stationery. |
+| `wfh_fixed_rate` | `hours x rate` | `WFH_HOURS` x `WFH_RATE_PER_HOUR`. Blank with `not computed: set WFH_HOURS and WFH_RATE_PER_HOUR` when either is missing. |
+| `wfh_actual_cost` | `internet`, `phone` | The counted bills' AUD total x the percentage. Blank with `not computed: set <VARIABLE>` when it is missing. |
+| `wfh_actual_cost` | `energy` | The value of `WFH_ENERGY_AMOUNT`. |
+| `wfh_actual_cost` | `total` | The sum of the rows that were computed; `notes` names the variables still missing. Blank when none was computed. |
+| `wfh_scenarios` | `base deductions + fixed rate`, `base deductions + actual cost` | The deductions total plus the method's figure, for each method computed fully or partly. `notes`: `illustrative; one method per year; not added to the base total`. |
+| `wfh_note` | `illustrative only` | The reminder that the fixed rate covers internet, phone and energy, so those bills are not also claimed in `deductions.csv`. |
+
+The WFH figures are never added to `deductions`, `pending` or `tax_saving`. The method is
+undecided and one method applies per year, so both are shown side by side.
+
+### What the scenarios assume
+
+These are the owner's own working assumptions, from personal research that is partly
+unverified. They are not facts this tool establishes, and the ATO and your accountant decide:
+
+- Fixed rate: hours x a per-hour rate (the owner's notes say $0.70 for 2024-25 and 2025-26)
+  covers internet, phone, energy for heating, cooling and lighting, and stationery, with one
+  bill or receipt per covered type as evidence.
+- Actual cost: internet and phone by annual cost x work-use percentage; energy from the
+  appliances used, not as a share of the bill.
+- One method per year. The owner and the accountant choose it.
+
+Check each point, and the rate you put in `WFH_RATE_PER_HOUR`, before relying on a figure.
+
+### Console and `verify`
+
+When any bills are listed, `run` prints `bills: N listed, AUD <total>` after the estimate
+line, where `<total>` is the AUD total of the counted bills. `--dry-run` prints the same line
+and writes nothing. The outputs are written in this order: `deductions.csv`, `review.csv`,
+`investments.csv`, `bills.csv`, `estimate.csv`, `manifest.json`. `bills.csv` is listed in
+the manifest with `counts.bills_count` and a file entry, and `verify` requires it: a manifest
+that does not list it exits 2 and names `bills.csv`; re-run `run`. The manifest also records
+`parameters.bill_document_type` and `parameters.bill_kind_tags`.
 
 ## Development
 

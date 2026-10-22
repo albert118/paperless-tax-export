@@ -35,6 +35,7 @@ OUTPUT_FILES = (
     "deductions.csv",
     "review.csv",
     "investments.csv",
+    "bills.csv",
     "estimate.csv",
     "manifest.json",
 )
@@ -99,7 +100,11 @@ def make_handler(
                 )
             )
         if path == "/api/document_types/":
-            return json_response(page_payload([document_type_payload(6, "Statement")]))
+            return json_response(
+                page_payload(
+                    [document_type_payload(6, "Statement"), document_type_payload(7, "bill")]
+                )
+            )
         if path == "/api/documents/":
             if params.get("page_size") == "1" and params.get("fields") == "id":
                 tagged = [d for d in all_documents if paperless_filter_matches(d, params)]
@@ -311,7 +316,13 @@ def test_manifest_hashes_and_row_counts_match_the_files_on_disk(tmp_path: Path) 
     run_export(Settings(), make_client(make_handler()), output=output)
     outputs = _manifest(output)["outputs"]
     assert isinstance(outputs, dict)
-    assert sorted(outputs) == ["deductions.csv", "estimate.csv", "investments.csv", "review.csv"]
+    assert sorted(outputs) == [
+        "bills.csv",
+        "deductions.csv",
+        "estimate.csv",
+        "investments.csv",
+        "review.csv",
+    ]
     for name, entry in outputs.items():
         data = (output / name).read_bytes()
         assert entry["sha256"] == hashlib.sha256(data).hexdigest()
@@ -331,6 +342,7 @@ def test_manifest_records_versions_parameters_and_counts(tmp_path: Path) -> None
         "accepted": 1,
         "review": 1,
         "investments_count": 1,
+        "bills_count": 0,
     }
     parameters = manifest["parameters"]
     assert isinstance(parameters, dict)

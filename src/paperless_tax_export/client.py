@@ -119,16 +119,19 @@ class PaperlessClient:
         *,
         tag_id: int | None = None,
         correspondent_id: int | None = None,
+        document_type_id: int | None = None,
         created_from: str,
         created_to: str,
     ) -> list[Document]:
         """All documents created within the inclusive window.
 
-        Narrowed to *tag_id* and/or *correspondent_id* when given; at least one
-        of the two is required so the call never lists the whole library.
+        Narrowed to *tag_id*, *correspondent_id* and/or *document_type_id* when
+        given; at least one is required so the call never lists the whole library.
         """
-        if tag_id is None and correspondent_id is None:
-            raise ValueError("list_documents needs a tag_id or a correspondent_id")
+        if tag_id is None and correspondent_id is None and document_type_id is None:
+            raise ValueError(
+                "list_documents needs a tag_id, a correspondent_id or a document_type_id"
+            )
         params: dict[str, Any] = {
             "created__gte": created_from,
             "created__lte": created_to,
@@ -138,6 +141,8 @@ class PaperlessClient:
             params["tags__id__all"] = str(tag_id)
         if correspondent_id is not None:
             params["correspondent__id"] = str(correspondent_id)
+        if document_type_id is not None:
+            params["document_type__id"] = str(document_type_id)
         return self._paginate("/api/documents/", TypeAdapter(Page[Document]), params=params)
 
     def count_documents(self, *, tag_id: int) -> int:

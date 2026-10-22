@@ -23,6 +23,7 @@ from paperless_tax_export.env_config import (
     resolve_base_url,
     resolve_marginal_rate,
     resolve_token,
+    resolve_wfh_inputs,
 )
 from paperless_tax_export.errors import EXIT_NETWORK, EXIT_OK, TaxExportError, VerificationError
 from paperless_tax_export.export import ExportResult, run_export, unconfigured_field_notes
@@ -139,7 +140,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "Classify the deduction-tagged documents for one financial year,"
             " write deductions.csv (rows that pass every check) and review.csv"
             " (rows with reason codes a human still has to decide on), plus"
-            " investments.csv (the investing correspondent's documents for the year), and"
+            " investments.csv (the investing correspondent's documents for the year),"
+            " bills.csv (the utilities and bills of the year) and"
             " estimate.csv (an estimate of total deductions, not tax advice)."
         ),
     )
@@ -293,6 +295,7 @@ def _settings_from_run_args(args: argparse.Namespace, sources: EnvSources) -> Se
         expected_count=args.expected_count,
         marginal_rate=resolve_marginal_rate(sources),
         rates_file=args.rates,
+        wfh=resolve_wfh_inputs(sources),
     )
 
 
@@ -353,6 +356,8 @@ def _run_export_command(settings: Settings, token: str, args: argparse.Namespace
         f"({result.selected_count} deduction documents)"
     )
     print(_estimate_summary(result))
+    if result.bills_count:
+        print(f"bills: {result.bills_count} listed, AUD {result.bills_aud:.2f}")
     print(
         f"tagged {result.tagged_total}, out of FY {result.out_of_fy_count}, "
         f"selected in FY {result.selected_count}, investments {result.investments_count}"

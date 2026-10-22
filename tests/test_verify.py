@@ -24,7 +24,7 @@ from paperless_tax_export.verify import (
 
 BOM = b"\xef\xbb\xbf"
 HEADER = b"id,title\r\n"
-CSV_FILES = ("deductions.csv", "review.csv", "investments.csv", "estimate.csv")
+CSV_FILES = ("deductions.csv", "review.csv", "investments.csv", "bills.csv", "estimate.csv")
 
 
 @pytest.fixture
@@ -77,6 +77,7 @@ def _counts(accepted: int, review: int, investments: int) -> dict[str, int]:
         "accepted": accepted,
         "review": review,
         "investments_count": investments,
+        "bills_count": 0,
     }
 
 
@@ -91,7 +92,7 @@ def test_real_run_output_verifies_clean(output: Path, capsys: pytest.CaptureFixt
     assert [line for line in lines if line.startswith("OK ")] == [
         f"OK {name}" for name in sorted(CSV_FILES)
     ]
-    assert "verify OK: 4 files match the manifest" in lines
+    assert "verify OK: 5 files match the manifest" in lines
     assert "note: not listed in the manifest: manifest.json" in lines
 
 
@@ -172,7 +173,7 @@ def test_changed_byte_in_a_csv_is_a_hash_mismatch(
     assert mismatch.startswith("MISMATCH deductions.csv: expected sha256 ")
     assert "(differs: sha256)" in mismatch
     assert "OK review.csv" in out
-    assert "verify FAILED: 1 problem(s); 3 of 4 files OK" in out
+    assert "verify FAILED: 1 problem(s); 4 of 5 files OK" in out
 
 
 def test_row_count_differing_from_the_manifest_is_a_row_mismatch(
@@ -369,6 +370,41 @@ def test_manifest_without_the_estimate_is_a_usage_error_naming_the_missing_file(
     assert "Traceback" not in err
 
 
+def test_manifest_without_the_bills_file_is_a_usage_error_naming_it(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def to_estimate_only(payload: dict[str, Any]) -> None:
+        del payload["outputs"]["bills.csv"]
+        del payload["counts"]["bills_count"]
+
+    _edit_manifest(output, to_estimate_only)
+    code, out, err = _verify(output, capsys)
+    assert code == 2
+    assert out == ""
+    assert "'outputs' does not list bills.csv" in err
+    assert "Traceback" not in err
+
+
+def test_changed_bills_file_is_a_hash_mismatch(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = output / "bills.csv"
+    path.write_bytes(path.read_bytes() + b"9,2025-10-01,,Extra,gas,1.00,AUD,\r\n")
+    code, out, _ = _verify(output, capsys)
+    assert code == 4
+    assert "MISMATCH bills.csv" in out
+    assert "(differs: sha256, rows)" in out
+
+
+def test_bills_count_that_disagrees_with_the_file_fails(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _edit_manifest(output, _set(("counts", "bills_count"), 4))
+    code, out, _ = _verify(output, capsys)
+    assert code == 4
+    assert "CHECK FAILED counts.bills_count: manifest says 4, bills.csv has 0 data rows" in out
+
+
 def test_changed_estimate_is_a_hash_mismatch(
     output: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -562,6 +598,7 @@ def test_multi_line_cell_directory_verifies_with_the_csv_row_count(
             "deductions.csv": deductions,
             "review.csv": BOM + HEADER,
             "investments.csv": BOM + HEADER,
+            "bills.csv": BOM + HEADER,
             "estimate.csv": BOM + HEADER,
         },
         _counts(accepted=1, review=0, investments=0),
@@ -601,7 +638,13 @@ def test_check_file_ok_when_hash_and_rows_match() -> None:
 
 def test_check_consistency_skips_files_without_a_measured_row_count() -> None:
     counts = ManifestCounts(
-        tagged_total=2, out_of_fy=0, selected_in_fy=2, accepted=1, review=1, investments_count=0
+        tagged_total=2,
+        out_of_fy=0,
+        selected_in_fy=2,
+        accepted=1,
+        review=1,
+        investments_count=0,
+        bills_count=0,
     )
     assert check_consistency(counts, {}) == ()
     assert check_consistency(counts, {"deductions.csv": 1, "review.csv": 1}) == ()

@@ -25,6 +25,7 @@ from pathlib import Path
 
 from paperless_tax_export.errors import ManifestError
 from paperless_tax_export.manifest import (
+    BILLS_FILE,
     DEDUCTIONS_FILE,
     ESTIMATE_FILE,
     INVESTMENTS_FILE,
@@ -34,7 +35,7 @@ from paperless_tax_export.manifest import (
 )
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
-_REQUIRED_OUTPUTS = (DEDUCTIONS_FILE, REVIEW_FILE, INVESTMENTS_FILE, ESTIMATE_FILE)
+_REQUIRED_OUTPUTS = (DEDUCTIONS_FILE, REVIEW_FILE, INVESTMENTS_FILE, BILLS_FILE, ESTIMATE_FILE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,6 +191,7 @@ def check_consistency(counts: ManifestCounts, rows_by_file: Mapping[str, int]) -
         ("accepted", counts.accepted, DEDUCTIONS_FILE),
         ("review", counts.review, REVIEW_FILE),
         ("investments_count", counts.investments_count, INVESTMENTS_FILE),
+        ("bills_count", counts.bills_count, BILLS_FILE),
     )
     failures = [
         f"CHECK FAILED counts.{field}: manifest says {claimed}, {name} has "

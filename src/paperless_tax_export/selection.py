@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from paperless_tax_export.client import PaperlessClient
 from paperless_tax_export.errors import CountGuardError, StartupError
-from paperless_tax_export.models import CustomFieldDef, Document, Tag
+from paperless_tax_export.models import CustomFieldDef, Document, DocumentType, Tag
 
 
 @dataclass(frozen=True)
@@ -147,6 +147,49 @@ def select_ibkr_documents(
             f"{unexpected} of {len(documents)} documents listed for correspondent "
             f"{correspondent_name!r} (id {matches[0].id}) belong to another correspondent; "
             "the server may have ignored the correspondent filter"
+        )
+    ordered = sorted(documents, key=lambda document: (document.created[:10], document.id))
+    return True, tuple(ordered)
+
+
+def select_bill_documents(
+    client: PaperlessClient,
+    document_types: Sequence[DocumentType],
+    type_name: str,
+    fy_start: str,
+    fy_end: str,
+) -> tuple[bool, tuple[Document, ...]]:
+    """Select the documents of one document type inside the inclusive FY window.
+
+    Returns ``(found, documents)``. A document type that does not exist is not
+    an error: the result is ``(False, ())`` and the caller decides how to report
+    it. *document_types* is the already-fetched type list; the name is matched
+    exactly and more than one type with that name raises ``StartupError``.
+    Paperless ignores query parameters it does not declare, so a returned
+    document of another type or created outside the window also raises
+    ``StartupError`` (counts only, no titles). Documents are sorted by
+    ``(created date, document id)``.
+    """
+    matches = [item for item in document_types if item.name == type_name]
+    if not matches:
+        return False, ()
+    if len(matches) > 1:
+        raise StartupError(
+            f"expected at most one document type named {type_name!r}, found {len(matches)}"
+        )
+    type_id = matches[0].id
+    documents = client.list_documents(
+        document_type_id=type_id,
+        created_from=fy_start,
+        created_to=fy_end,
+    )
+    other_type = sum(1 for document in documents if document.document_type != type_id)
+    outside = sum(1 for document in documents if not fy_start <= document.created[:10] <= fy_end)
+    if other_type or outside:
+        raise StartupError(
+            f"of {len(documents)} documents listed for document type {type_name!r} "
+            f"(id {type_id}), {other_type} are of another type and {outside} were created "
+            f"outside {fy_start} to {fy_end}; the server may have ignored a filter"
         )
     ordered = sorted(documents, key=lambda document: (document.created[:10], document.id))
     return True, tuple(ordered)

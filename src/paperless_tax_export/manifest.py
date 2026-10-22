@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 from paperless_tax_export import __version__
@@ -20,6 +21,7 @@ from paperless_tax_export.settings import Settings
 DEDUCTIONS_FILE = "deductions.csv"
 REVIEW_FILE = "review.csv"
 INVESTMENTS_FILE = "investments.csv"
+BILLS_FILE = "bills.csv"
 ESTIMATE_FILE = "estimate.csv"
 MANIFEST_FILE = "manifest.json"
 
@@ -47,6 +49,7 @@ class ManifestCounts:
     accepted: int
     review: int
     investments_count: int
+    bills_count: int
 
 
 def render_manifest(
@@ -79,6 +82,13 @@ def render_manifest(
             if settings.marginal_rate is None
             else f"{settings.marginal_rate:f}",
             "rates_file_sha256": rates_file_sha256,
+            "bill_document_type": settings.bill_document_type,
+            "bill_kind_tags": dict(sorted(settings.bill_kind_tags.items())),
+            "wfh_hours": _typed(settings.wfh.hours),
+            "wfh_rate_per_hour": _typed(settings.wfh.rate_per_hour),
+            "wfh_internet_pct": _typed(settings.wfh.internet_pct),
+            "wfh_phone_pct": _typed(settings.wfh.phone_pct),
+            "wfh_energy_amount": _typed(settings.wfh.energy_amount),
         },
         "counts": {
             "tagged_total": counts.tagged_total,
@@ -87,8 +97,14 @@ def render_manifest(
             "accepted": counts.accepted,
             "review": counts.review,
             "investments_count": counts.investments_count,
+            "bills_count": counts.bills_count,
         },
         "expected_count": settings.expected_count,
         "outputs": {file.name: {"sha256": file.sha256, "rows": file.rows} for file in files},
     }
     return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def _typed(value: Decimal | None) -> str | None:
+    """A decimal as typed (``0.70`` stays ``0.70``), or ``None`` when the variable is unset."""
+    return None if value is None else f"{value:f}"
