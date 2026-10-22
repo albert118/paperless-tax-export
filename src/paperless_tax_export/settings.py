@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 
 from paperless_tax_export.errors import SettingsError
@@ -40,6 +41,8 @@ class Settings:
     income_tags: tuple[str, ...] = ("income", "dividend")
     asset_reviewed_tag: str | None = "asset-reviewed"
     expected_count: int | None = None
+    marginal_rate: Decimal | None = None
+    rates_file: Path | None = None
     timeout_seconds: float = 30.0
 
     def __post_init__(self) -> None:
@@ -72,6 +75,12 @@ class Settings:
             )
         if self.expected_count is not None and self.expected_count < 0:
             raise SettingsError(f"expected_count must not be negative, got {self.expected_count}")
+        if self.marginal_rate is not None and not (
+            self.marginal_rate.is_finite() and 0 <= self.marginal_rate <= 1
+        ):
+            raise SettingsError("marginal_rate must be a decimal between 0 and 1")
+        if self.rates_file is not None and self.rates_file == Path():
+            raise SettingsError("rates_file must name a file")
         if self.timeout_seconds <= 0:
             raise SettingsError(f"timeout_seconds must be positive, got {self.timeout_seconds}")
 

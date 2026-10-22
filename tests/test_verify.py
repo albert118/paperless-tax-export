@@ -24,7 +24,7 @@ from paperless_tax_export.verify import (
 
 BOM = b"\xef\xbb\xbf"
 HEADER = b"id,title\r\n"
-CSV_FILES = ("deductions.csv", "review.csv", "investments.csv")
+CSV_FILES = ("deductions.csv", "review.csv", "investments.csv", "estimate.csv")
 
 
 @pytest.fixture
@@ -91,7 +91,7 @@ def test_real_run_output_verifies_clean(output: Path, capsys: pytest.CaptureFixt
     assert [line for line in lines if line.startswith("OK ")] == [
         f"OK {name}" for name in sorted(CSV_FILES)
     ]
-    assert "verify OK: 3 files match the manifest" in lines
+    assert "verify OK: 4 files match the manifest" in lines
     assert "note: not listed in the manifest: manifest.json" in lines
 
 
@@ -172,7 +172,7 @@ def test_changed_byte_in_a_csv_is_a_hash_mismatch(
     assert mismatch.startswith("MISMATCH deductions.csv: expected sha256 ")
     assert "(differs: sha256)" in mismatch
     assert "OK review.csv" in out
-    assert "verify FAILED: 1 problem(s); 2 of 3 files OK" in out
+    assert "verify FAILED: 1 problem(s); 3 of 4 files OK" in out
 
 
 def test_row_count_differing_from_the_manifest_is_a_row_mismatch(
@@ -358,6 +358,28 @@ def test_manifest_from_0_2_x_is_a_usage_error_naming_the_missing_file(
     assert "Traceback" not in err
 
 
+def test_manifest_without_the_estimate_is_a_usage_error_naming_the_missing_file(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _edit_manifest(output, _drop(("outputs", "estimate.csv")))
+    code, out, err = _verify(output, capsys)
+    assert code == 2
+    assert out == ""
+    assert "'outputs' does not list estimate.csv" in err
+    assert "Traceback" not in err
+
+
+def test_changed_estimate_is_a_hash_mismatch(
+    output: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = output / "estimate.csv"
+    path.write_bytes(path.read_bytes().replace(b"100.00", b"100.01"))
+    code, out, _ = _verify(output, capsys)
+    assert code == 4
+    assert "MISMATCH estimate.csv" in out
+    assert "(differs: sha256)" in out
+
+
 def test_manifest_with_the_old_count_key_is_a_usage_error_naming_the_new_key(
     output: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -540,6 +562,7 @@ def test_multi_line_cell_directory_verifies_with_the_csv_row_count(
             "deductions.csv": deductions,
             "review.csv": BOM + HEADER,
             "investments.csv": BOM + HEADER,
+            "estimate.csv": BOM + HEADER,
         },
         _counts(accepted=1, review=0, investments=0),
     )

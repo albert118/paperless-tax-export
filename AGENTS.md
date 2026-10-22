@@ -16,6 +16,9 @@ Outputs, written into `output/`:
   priority output.
 - `deductions.csv`: documents that pass every check.
 - `investments.csv`: index of the investing portfolio statements (one configured correspondent).
+- `estimate.csv`: an estimate of total deductions in AUD (the sum of `deductions.csv`), a
+  separate pending figure for `review.csv` rows, and an optional tax saving. Foreign amounts
+  are converted with the owner's rates file (`run --rates FILE`). Not tax advice.
 - `manifest.json`: parameters, versions, counts and file hashes.
 
 ## Current state
@@ -26,13 +29,20 @@ reports how it lines up with the export settings (`output/audit.json`). The audi
 diagnostic, not a gate: a missing tag, zero matching documents, missing fields and zero
 coverage are printed findings and the exit code stays 0. The `run` subcommand
 classifies the FY documents and writes `deductions.csv` and `review.csv`, plus
-`investments.csv` (the configured investing correspondent's FY documents) and `manifest.json`
-(no timestamp, written last). `run --expected-count N` compares N with the FY-scoped
-selected count and `run --dry-run` runs every guard and writes nothing.
+`investments.csv` (the configured investing correspondent's FY documents), `estimate.csv`
+and `manifest.json` (no timestamp, written last). `run --expected-count N` compares N with
+the FY-scoped selected count and `run --dry-run` runs every guard and writes nothing.
 `verify [--output DIR]` re-checks a finished output directory offline: SHA-256 and data-row
 count of every file in `manifest.json`, plus the manifest's own counts (exit 0, 4 on a
 mismatch or missing listed file, 2 on an unusable manifest, which includes a manifest
-written by 0.2.x: it lists `ibkr-documents.csv` and `counts.ibkr_count`).
+written by 0.2.x (it lists `ibkr-documents.csv` and `counts.ibkr_count`) or one that does
+not list `estimate.csv`).
+
+The estimate's setting: `TAX_MARGINAL_RATE` (a decimal fraction from 0 to 1) is resolved like
+`PAPERLESS_TOKEN` through `EnvSources.lookup` (real env var, then dotenv; no command-line flag)
+and is optional; without it there is no `tax_saving` row. Both it and the SHA-256 of the
+`--rates` file are recorded in the manifest parameters. Amounts are `Decimal` and each row's
+AUD amount is rounded to cents (`ROUND_HALF_UP`) before summing.
 
 In place: `pyproject.toml` and `uv.lock` (uv, Python 3.14), `src/paperless_tax_export/`,
 `tests/`, `Dockerfile` and `.dockerignore`, the dotfiles, `.vscode/`, `.github/` (CI,

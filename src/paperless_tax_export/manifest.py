@@ -20,6 +20,7 @@ from paperless_tax_export.settings import Settings
 DEDUCTIONS_FILE = "deductions.csv"
 REVIEW_FILE = "review.csv"
 INVESTMENTS_FILE = "investments.csv"
+ESTIMATE_FILE = "estimate.csv"
 MANIFEST_FILE = "manifest.json"
 
 
@@ -55,6 +56,7 @@ def render_manifest(
     files: tuple[PlannedFile, ...],
     server_version: str | None,
     api_version: str | None,
+    rates_file_sha256: str | None = None,
 ) -> bytes:
     """Canonical manifest bytes (UTF-8, LF, trailing newline)."""
     payload: dict[str, Any] = {
@@ -73,6 +75,10 @@ def render_manifest(
             "field_work_use": settings.field_work_use,
             "field_date": settings.field_date,
             "field_supplier": settings.field_supplier,
+            "marginal_rate": None
+            if settings.marginal_rate is None
+            else f"{settings.marginal_rate:f}",
+            "rates_file_sha256": rates_file_sha256,
         },
         "counts": {
             "tagged_total": counts.tagged_total,

@@ -51,5 +51,6 @@ Files go to the mounted directory (`/app/output` in the container):
 - `review.csv`: documents that need a human decision, with reason codes.
 - `deductions.csv`: documents that pass every check.
 - `investments.csv`: index of the configured investing correspondent's statements.
+- `estimate.csv`: an estimate of total deductions in AUD (not tax advice).
 - `manifest.json`: parameters, versions, counts and file hashes.
 - `audit.json`: written by `audit`.
